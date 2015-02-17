@@ -122,7 +122,7 @@
       <DesignTimeSharedInput>True</DesignTimeSharedInput>
       <DependentUpon>Settings.settings</DependentUpon>
     </Compile>
-    <Compile Include="PXCMBitmap.cs" />
+    <Compile Include="PictureBitmap.cs" />
     <Compile Include="raw_streams.cs" />
     <Compile Include="timer.cs" />
   </ItemGroup>

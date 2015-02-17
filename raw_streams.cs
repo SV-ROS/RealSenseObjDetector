@@ -79,9 +79,8 @@ namespace raw_streams.cs
 
                             GuiParams guiParams = form.GetParams();
                             PXCMCapture.Sample sample = pp.QuerySample();
-                            projection.DepthToScan(sample.depth);
+                            projection.ComputePixelQuality(sample.depth, guiParams.processParams);
                             pp.ReleaseFrame();
-                            projection.ComputePixelQualityFromCurvature(guiParams.processParams);
 
                             byte[] bitmap_data = projection.GetPixelColors(guiParams.maxBadPixelQuality, guiParams.minGoodPixelQuality);
                             form.SetPicture(bitmap_width, bitmap_height, bitmap_data);
@@ -89,7 +88,7 @@ namespace raw_streams.cs
 
                             if (form.IsSaveToPcdRequested())
                             {
-                                projection.SaveToPcd();
+                                projection.SaveToPcd(form.getXyzPcdFileName(), form.getNormalsPcdFileName(), form.IsSaveToPcdBinary());
                                 form.OnSaveToPcdCompleted();
                             }
                             timer.Tick("Streaming.");

@@ -10,14 +10,12 @@ namespace raw_streams.cs
 {
     class Projection: IDisposable
     {
-        private PXCMProjection projection=null;
+        private PXCMProjection projection = null;
         private readonly UInt16 invalid_value; /* invalid depth values */
-        private PXCMPointF32[] uvmap;
         private managed_pcl.Scan scan;
         private PXCMPoint3DF32[] coords;
         private float[] pixelQuality;
         private byte[] pixelColors;
-        private int fileIndex = 0;
 
         public Projection(PXCMSession session, PXCMCapture.Device device, PXCMImage.ImageInfo dinfo)
         {
@@ -28,7 +26,6 @@ namespace raw_streams.cs
             projection = device.CreateProjection();
 
             int numOfPixels = dinfo.width * dinfo.height;
-            uvmap = new PXCMPointF32[numOfPixels];
             scan = new managed_pcl.Scan(dinfo.width, dinfo.height);
             coords = new PXCMPoint3DF32[numOfPixels];
             pixelQuality = new float[numOfPixels];
@@ -49,15 +46,17 @@ namespace raw_streams.cs
             }
         }
 
-        public void DepthToScan(PXCMImage depth)
+        public void ComputePixelQuality(PXCMImage depth, managed_pcl.ProcessParams processParams)
         {
-            pxcmStatus sts = projection.QueryVertices(depth, coords);
-            scan.setCoords(coords);
-        }
-
-        public void ComputePixelQualityFromCurvature(managed_pcl.ProcessParams processParams)
-        {
-            scan.computePixelQualityFromCurvature(pixelQuality, processParams);
+            if (processParams.qualityEstimationMethod == managed_pcl.QualityEstimationMethod.DepthChange)
+            {
+                this.computePixelQualityFromDepth(depth);
+            }
+            else
+            {
+                this.depthToScan(depth);
+                this.computePixelQualityFromNormals(processParams);
+            }
         }
 
         public byte[] GetPixelColors(float maxBad, float minGood)
@@ -69,37 +68,106 @@ namespace raw_streams.cs
             for (int i = 0; i < numOfPixels; ++i)
             {
                 float pq = pixelQuality[i];
-                if (pq <= maxBad)
-                {
-                    pixelColors[4 * i + 0] = 255;
+                if (float.IsNaN(pq))
+                { //: black:
+                    pixelColors[4 * i + 0] = 0;
                     pixelColors[4 * i + 1] = 0;
                     pixelColors[4 * i + 2] = 0;
-                } else if (pq >= minGood)
-                {
+                }
+                else if (pq <= 0)
+                { //: magenta:
+                    pixelColors[4 * i + 0] = 255;
+                    pixelColors[4 * i + 1] = 0;
+                    pixelColors[4 * i + 2] = 255;
+                }
+                else if (pq >= 1)
+                { //: cyan:
+                    pixelColors[4 * i + 0] = 255;
+                    pixelColors[4 * i + 1] = 255;
+                    pixelColors[4 * i + 2] = 0;
+                }
+                else if (pq <= maxBad)
+                { //: red:
+                    pixelColors[4 * i + 0] = 0;
+                    pixelColors[4 * i + 1] = 0;
+                    pixelColors[4 * i + 2] = 255;
+                }
+                else if (pq >= minGood)
+                { //: green:
                     pixelColors[4 * i + 0] = 0;
                     pixelColors[4 * i + 1] = 255;
                     pixelColors[4 * i + 2] = 0;
                 }
                 else
-                {
-                    double rw = (pq - maxBad) / yellowZoneLength;
-                    pixelColors[4 * i + 0] = (byte)(255.0 * rw);
-                    pixelColors[4 * i + 1] = (byte)(255.0 * (1.0 - rw));
-                    pixelColors[4 * i + 2] = 255;
+                { //: gradient from red to green:
+                    double w = (pq - maxBad) / yellowZoneLength;
+                    pixelColors[4 * i + 0] = 0;
+                    pixelColors[4 * i + 1] = (byte)(255.0 * w);
+                    pixelColors[4 * i + 2] = (byte)(255.0 * (1.0 - w));
                 }
             }
             return pixelColors;
         }
 
-        public void SaveToPcd(string fileName)
+        public void SaveToPcd(string xyzFileName, string normalsFileName, bool binary)
         {
-            scan.saveToPcdFile(fileName);
+            scan.saveToPcdFile(xyzFileName, normalsFileName, binary);
         }
 
-        public void SaveToPcd()
+        private void depthToScan(PXCMImage depth)
         {
-            string fileName = string.Format("c:/p/00-rs2pcd/{0:D6}.pcd", (++fileIndex));
-            SaveToPcd(fileName);
+            pxcmStatus sts = projection.QueryVertices(depth, coords);
+            scan.setCoords(coords);
         }
+
+        private void computePixelQualityFromNormals(managed_pcl.ProcessParams processParams)
+        {
+            scan.computePixelQualityFromNormals(pixelQuality, processParams);
+        }
+
+        private void computePixelQualityFromDepth(PXCMImage depthImage)
+        {
+            PXCMImage.ImageData depthImageData;
+            UInt16[] pixelDepths = null;
+            const UInt16 minDepth = 100;
+            UInt16 maxDepth = 1100;
+            if (depthImage.AcquireAccess(PXCMImage.Access.ACCESS_READ, PXCMImage.PixelFormat.PIXEL_FORMAT_DEPTH, out depthImageData) >= pxcmStatus.PXCM_STATUS_NO_ERROR)
+            {
+                int width = (int)depthImageData.pitches[0] / sizeof(Int16);
+                int height = (int)depthImage.info.height;
+                pixelDepths = depthImageData.ToUShortArray(0, width * height);
+                System.Diagnostics.Debug.Assert(pixelDepths.Length == pixelQuality.Length);
+                depthImage.ReleaseAccess(depthImageData);
+                //minDepth = pixelDepths.Min(p => (p == this.invalid_value ? ushort.MaxValue : p));
+                //maxDepth = pixelDepths.Max();
+            }
+            if (pixelDepths != null) //minDepth < maxDepth)
+            {
+                int numOfPixels = pixelQuality.Length;
+                float delta = (float)(maxDepth - minDepth);
+                for (int i = 0; i < numOfPixels; ++i)
+                {
+                    if (pixelDepths[i] == this.invalid_value)
+                        pixelQuality[i] = float.NaN;
+                    else
+                    {
+                        float p = Math.Max(0.0f, (maxDepth - pixelDepths[i]) / delta);
+                        pixelQuality[i] = p * p * p;
+                    }
+                }
+            }
+            else
+                setAllNan();
+        }
+
+        private void setAllNan()
+        {
+            int numOfPixels = pixelQuality.Length;
+            for (int i = 0; i < numOfPixels; ++i)
+            {
+                pixelQuality[i] = float.NaN;
+            }
+        }
+
     }
 }

@@ -16,11 +16,15 @@ namespace raw_streams.cs
             get
             {
                 GuiParams result = new GuiParams();
-                result.processParams.normalEstimatorMethod = managed_pcl.NormalEstimationMethod.COVARIANCE_MATRIX;
-                result.processParams.maxDepthChangeFactor = 0.001f;
-                result.processParams.normalSmoothingSize = 6.0f;
-                result.maxBadPixelQuality = 0;
-                result.minGoodPixelQuality = 1;
+                result.processParams.qualityEstimationMethod = managed_pcl.QualityEstimationMethod.Curvature;
+                result.processParams.normalEstimationParams1.normalEstimatorMethod = managed_pcl.NormalEstimationMethod.COVARIANCE_MATRIX;
+                result.processParams.normalEstimationParams1.maxDepthChangeFactor = 0.001f;
+                result.processParams.normalEstimationParams1.normalSmoothingSize = 6.0f;
+                result.processParams.normalEstimationParams2.normalEstimatorMethod = managed_pcl.NormalEstimationMethod.COVARIANCE_MATRIX;
+                result.processParams.normalEstimationParams2.maxDepthChangeFactor = 0.001f;
+                result.processParams.normalEstimationParams2.normalSmoothingSize = 60.0f;
+                result.maxBadPixelQuality = 0.001f;
+                result.minGoodPixelQuality = 0.999f;
                 return result;
             }
         }

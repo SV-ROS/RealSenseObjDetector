@@ -11,6 +11,13 @@ namespace unmanaged_impl {
 
 namespace managed_pcl {
 
+    public enum class QualityEstimationMethod
+    {
+      Curvature,
+      CurvatureStability,
+      DepthChange
+    };
+
     public enum class NormalEstimationMethod
     {
       COVARIANCE_MATRIX,
@@ -18,11 +25,18 @@ namespace managed_pcl {
       AVERAGE_DEPTH_CHANGE
     };
 
-    public value struct ProcessParams
+    public value struct NormalEstimationParams
     {
         NormalEstimationMethod normalEstimatorMethod;
         float maxDepthChangeFactor;
         float normalSmoothingSize;
+    };
+
+    public value struct ProcessParams
+    {
+        QualityEstimationMethod qualityEstimationMethod;
+        NormalEstimationParams normalEstimationParams1;
+        NormalEstimationParams normalEstimationParams2;
     };
 
     public ref class Scan : public System::IDisposable
@@ -52,8 +66,8 @@ namespace managed_pcl {
         }
 
         void setCoords(cli::array<PXCMPoint3DF32, 1>^ coords);
-        void computePixelQualityFromCurvature(cli::array<System::Single, 1>^ result, ProcessParams params);
-        void saveToPcdFile(System::String^ fileName);
+        void computePixelQualityFromNormals(cli::array<System::Single, 1>^ result, ProcessParams params);
+        void saveToPcdFile(System::String^ xyzFileName, System::String^ normalsFileName, bool binary);
 
     private:
         void init();
@@ -65,9 +79,4 @@ namespace managed_pcl {
         int height_;
     };
 
-    public ref class Bridge abstract sealed
-    {
-    public:
-        static void saveToPcdFile(System::String^ fileName, int w, int h, cli::array<PXCMPoint3DF32, 1>^ coords);
-    };
 }

@@ -54,20 +54,28 @@ namespace umanaged_pcl {
         PclPoint const& at(int column, int row) const {
             return cloud_ptr_->at(column, row);
         }
-        PclPoint & at(int column, int row) {
-            return cloud_ptr_->at(column, row);
-        }
+        //PclPoint & at(int column, int row) {
+        //    return cloud_ptr_->at(column, row);
+        //}
 
         void setPoint(int column, int row, float x, float y, float z) {
             PclPoint& p = cloud_ptr_->at(column, row);
-            p.x = x;
-            p.y = y;
-            p.z = z;
+            if(z == 0.0f) { //: exact zero means invalid in Intel RealSense SDK; qnan means invalid in pcl
+                p.x = std::numeric_limits<float>::quiet_NaN();
+                p.y = std::numeric_limits<float>::quiet_NaN();
+                p.z = std::numeric_limits<float>::quiet_NaN();
+            } else { //: convert coords to meters to avoid confusion
+                p.x = x / 100.0f;
+                p.y = y / 100.0f;
+                p.z = z / 100.0f;
+            }
         }
 
-        void saveToPcdFile(const std::string& fileName) {
-            pcl::io::savePCDFileBinary(fileName, *cloud_);
-            //pcl::io::savePCDFileASCII(fileName, *cloud_);
+        void saveToPcdFile(const std::string& fileName, bool binary) {
+            if(binary)
+                pcl::io::savePCDFileBinary(fileName, *cloud_);
+            else
+                pcl::io::savePCDFileASCII(fileName, *cloud_);
         }
     };
 
@@ -94,12 +102,14 @@ namespace unmanaged_impl {
     public:
         ScanImpl(int w, int h)
             : scan(w, h)
-            , normals(w, h)
+            , normals1(w, h)
+            , normals2(w, h)
         {
         }
 
         umanaged_pcl::ScanXyz scan;
-        umanaged_pcl::ScanNormal normals;
+        umanaged_pcl::ScanNormal normals1;
+        umanaged_pcl::ScanNormal normals2;
     };
 } // namespace unmanaged_impl
 
@@ -110,13 +120,15 @@ namespace unmanaged_impl {
 namespace managed_pcl {
 
 std::string toStdString(System::String ^ s) {
-   using namespace System;
-   using namespace System::Runtime::InteropServices;
-   const char* chars = 
-      (const char*)(Marshal::StringToHGlobalAnsi(s)).ToPointer();
-   std::string res = chars;
-   Marshal::FreeHGlobal(IntPtr((void*)chars));
-   return res;
+    if(System::String::IsNullOrEmpty(s))
+        return std::string();
+    using namespace System;
+    using namespace System::Runtime::InteropServices;
+    const char* chars = 
+        (const char*)(Marshal::StringToHGlobalAnsi(s)).ToPointer();
+    std::string res = chars;
+    Marshal::FreeHGlobal(IntPtr((void*)chars));
+    return res;
 }
 
 
@@ -131,24 +143,50 @@ void Scan::setCoords(cli::array<PXCMPoint3DF32, 1>^ coords) {
     }
 }
 
-void Scan::computePixelQualityFromCurvature(cli::array<System::Single, 1>^ result, ProcessParams params) {
+void Scan::computePixelQualityFromNormals(cli::array<System::Single, 1>^ result, ProcessParams params) {
     int length = result->Length;
     assert(length == width_ * height_);
-    umanaged_pcl::computeNormals(impl_->normals, impl_->scan
-        , (umanaged_pcl::NormalEstimationMethod)params.normalEstimatorMethod
-        , params.maxDepthChangeFactor
-        , params.normalSmoothingSize);
-    for(int row = 0, i = 0; row < height_; ++row) {
-        for(int column = 0; column < width_; ++column, ++i) {
-            float curvature = impl_->normals.getPclCloud().at(column, row).curvature;
-            result[i] = (curvature == 0.0f) ? 0.0f : 1.0f - curvature; // exact zero means fail to compute normal
+    if(params.qualityEstimationMethod == QualityEstimationMethod::Curvature) {
+        umanaged_pcl::computeNormals(impl_->normals1, impl_->scan
+            , umanaged_pcl::NormalEstimator::COVARIANCE_MATRIX //: COVARIANCE_MATRIX is the only method producing curvatures
+            , params.normalEstimationParams1.maxDepthChangeFactor
+            , params.normalEstimationParams1.normalSmoothingSize);
+        for(int row = 0, i = 0; row < height_; ++row) {
+            for(int column = 0; column < width_; ++column, ++i) {
+                float curvature = impl_->normals1.getPclCloud().at(column, row).curvature;
+                //result[i] = (curvature == 0.0f) ? curvature : 1.0f - std::fabs(curvature); // exact zero means fail to compute normal?
+                result[i] = pcl_isfinite(curvature) ? 1.0f - std::fabs(curvature) : curvature;
+            }
+        }
+    } else if(params.qualityEstimationMethod == QualityEstimationMethod::CurvatureStability) {
+        umanaged_pcl::computeNormals(impl_->normals1, impl_->scan
+            , (umanaged_pcl::NormalEstimationMethod)params.normalEstimationParams1.normalEstimatorMethod
+            , params.normalEstimationParams1.maxDepthChangeFactor
+            , params.normalEstimationParams1.normalSmoothingSize);
+        umanaged_pcl::computeNormals(impl_->normals2, impl_->scan
+            , (umanaged_pcl::NormalEstimationMethod)params.normalEstimationParams2.normalEstimatorMethod
+            , params.normalEstimationParams2.maxDepthChangeFactor
+            , params.normalEstimationParams2.normalSmoothingSize * 2);
+        for(int row = 0, i = 0; row < height_; ++row) {
+            for(int column = 0; column < width_; ++column, ++i) {
+                if(pcl::isFinite(impl_->normals1.getPclCloud().at(column, row)) && pcl::isFinite(impl_->normals2.getPclCloud().at(column, row))) {
+                    float dot = impl_->normals1.getPclCloud().at(column, row).getNormalVector3fMap().dot(impl_->normals2.getPclCloud().at(column, row).getNormalVector3fMap());
+                    result[i] = std::fabs(dot);
+                } else {
+                    result[i] = std::numeric_limits<float>::quiet_NaN();
+                }
+            }
         }
     }
 }
 
-void Scan::saveToPcdFile(System::String^ fileName) {
-    std::string fileNameInUtf8 = toStdString(fileName);
-    impl_->scan.saveToPcdFile(fileNameInUtf8);
+void Scan::saveToPcdFile(System::String^ xyzFileName, System::String^ normalsFileName, bool binary) {
+    std::string xyzFileNameInUtf8 = toStdString(xyzFileName);
+    if(!xyzFileNameInUtf8.empty())
+        impl_->scan.saveToPcdFile(xyzFileNameInUtf8, binary);
+    std::string normalsFileNameInUtf8 = toStdString(normalsFileName);
+    if(!normalsFileNameInUtf8.empty())
+        impl_->normals1.saveToPcdFile(normalsFileNameInUtf8, binary);
 }
 
 void Scan::init() {
@@ -157,22 +195,8 @@ void Scan::init() {
 
 void Scan::clean() {
     delete impl_;
+    impl_ = nullptr;
 }
 
-
-
-
-void Bridge::saveToPcdFile(System::String^ fileName, int w, int h, cli::array<PXCMPoint3DF32, 1>^ coords) {
-    std::unique_ptr<umanaged_pcl::ScanXyz> cloud(new umanaged_pcl::ScanXyz(w, h));
-    int length = coords->Length;
-    assert(length == w * h);
-    for(int row = 0, i = 0; row < h; ++row)
-        for(int column = 0; column < w; ++column, ++i) {
-            PXCMPoint3DF32 rsp = coords[i];
-            cloud->setPoint(column, row, rsp.x, rsp.y, rsp.z);
-        }
-    std::string fileNameInUtf8 = toStdString(fileName);
-    cloud->saveToPcdFile(fileNameInUtf8);
-}
 
 }
