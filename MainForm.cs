@@ -25,6 +25,8 @@ namespace raw_streams.cs
         private Dictionary<ToolStripMenuItem, PXCMCapture.Device.StreamProfile> profiles=new Dictionary<ToolStripMenuItem,PXCMCapture.Device.StreamProfile>();
 
         private GuiParams guiParams = GuiParams.Default;
+        private CameraSettings cameraSettings = new CameraSettings();
+        private TrackBar[] cameraSettingsTrackBars;
         private volatile bool closing = false;
         private volatile bool stop = false;
         private string pcdFilePath = "c:/p/00-rs2pcd/";
@@ -70,6 +72,15 @@ namespace raw_streams.cs
             this.trackBarMaxBad.Value = (int)(1000f * guiParams.maxBadPixelQuality);
             this.trackBarMinGood.Value = (int)(1000f * guiParams.minGoodPixelQuality);
 
+            this.cameraSettingsTrackBars = new TrackBar[]
+            {
+                this.trackBarCamDepthCofidenceThreshold,
+                this.trackBarCamIvcamAccuracy,
+                this.trackBarCamIVCAMFilterOption,
+                this.trackBarCamIVCAMLaserPower,
+                this.trackBarCamIVCAMMotionRangeTradeOff
+            };
+
         }
 
         private delegate void UpdateFromOtherThreadDelegate();
@@ -107,6 +118,34 @@ namespace raw_streams.cs
         internal GuiParams GetParams()
         {
             return guiParams;
+        }
+        internal CameraSettings CameraSettings
+        {
+            get { return cameraSettings; }
+            set
+            {
+                this.cameraSettings = value;
+                this.Invoke(
+                    new UpdateFromOtherThreadDelegate(
+                        delegate()
+                        {
+                            cameraSettings.SetupTrackBars(this.cameraSettingsTrackBars);
+                        }
+                    )
+                );
+            }
+        }
+        internal void SetCameraSettings(CameraSettings cs, PXCMCapture.Device.PropertyInfo[] propInfo)
+        {
+            this.cameraSettings = cs;
+            this.Invoke(
+                new UpdateFromOtherThreadDelegate(
+                    delegate()
+                    {
+                        cameraSettings.SetupTrackBars(this.cameraSettingsTrackBars, propInfo);
+                    }
+                )
+            );
         }
 
         private void PopulateDeviceMenu()
@@ -672,6 +711,37 @@ namespace raw_streams.cs
         private void textBoxNormalSmoothingSize2_TextChanged(object sender, EventArgs e)
         {
             float.TryParse(textBoxNormalSmoothingSize2.Text, out guiParams.processParams.normalEstimationParams2.normalSmoothingSize);
+        }
+
+        private void trackBarCamDepthCofidenceThreshold_Scroll(object sender, EventArgs e)
+        {
+            this.cameraSettings.DepthConfidenceThreshold = (ushort)trackBarCamDepthCofidenceThreshold.Value;
+            this.cameraSettings.changed = true;
+        }
+
+        private void trackBarCamIvcamAccuracy_Scroll(object sender, EventArgs e)
+        {
+            this.cameraSettings.IVCAMAccuracy = trackBarCamIvcamAccuracy.Value;
+            this.cameraSettings.changed = true;
+        }
+
+        private void trackBarCamIVCAMFilterOption_Scroll(object sender, EventArgs e)
+        {
+            this.cameraSettings.IVCAMFilterOption = trackBarCamIVCAMFilterOption.Value;
+            this.cameraSettings.changed = true;
+        }
+
+        private void trackBarCamIVCAMLaserPower_Scroll(object sender, EventArgs e)
+        {
+            this.cameraSettings.IVCAMLaserPower = trackBarCamIVCAMLaserPower.Value;
+            this.cameraSettings.changed = true;
+
+        }
+
+        private void trackBarCamIVCAMMotionRangeTradeOff_Scroll(object sender, EventArgs e)
+        {
+            this.cameraSettings.IVCAMMotionRangeTradeOff = trackBarCamIVCAMMotionRangeTradeOff.Value;
+            this.cameraSettings.changed = true;
         }
 
     }

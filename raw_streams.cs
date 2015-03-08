@@ -9,6 +9,7 @@ namespace raw_streams.cs
     class RenderStreams
     {
         private MainForm form;
+        private CameraSettings appliedCameraSettings;
 
         public RenderStreams(MainForm mf)
         {
@@ -65,6 +66,8 @@ namespace raw_streams.cs
                 {
                     /* Configure the camera to return a non-mirrored image */
                     pp.captureManager.device.SetMirrorMode(PXCMCapture.Device.MirrorMode.MIRROR_MODE_DISABLED);
+                    appliedCameraSettings = CameraSettings.ReadFrom(pp.captureManager.device);
+                    form.SetCameraSettings(appliedCameraSettings, CameraSettings.ReadPropInfo(pp.captureManager.device));
 
                     /* For UV Mapping & Projection only: Save certain properties */
                     using (Projection projection = new Projection(pp.session, pp.captureManager.device, dinfo.imageInfo))
@@ -74,9 +77,18 @@ namespace raw_streams.cs
                         int bitmap_height = dinfo.imageInfo.height;
                         while (!form.GetStopState())
                         {
+                            CameraSettings newCameraSettings = form.CameraSettings;
+                            if (newCameraSettings.changed)
+                            {//: apply new camera settings:
+                                newCameraSettings.WriteTo(pp.captureManager.device, this.appliedCameraSettings);
+                                this.appliedCameraSettings = newCameraSettings;
+                            }
+
+                            //: acquire frame:
                             if (pp.AcquireFrame(false) < pxcmStatus.PXCM_STATUS_NO_ERROR)
                                 break;
 
+                            //: process frame:
                             GuiParams guiParams = form.GetParams();
                             PXCMCapture.Sample sample = pp.QuerySample();
                             projection.ComputePixelQuality(sample.depth, guiParams.processParams);

@@ -29,4 +29,69 @@ namespace raw_streams.cs
             }
         }
     }
+
+    internal struct CameraSettings
+    {
+        public ushort DepthConfidenceThreshold;
+        public int IVCAMAccuracy;
+        public int IVCAMFilterOption;
+        public int IVCAMLaserPower;
+        public int IVCAMMotionRangeTradeOff;
+        public bool changed;
+
+        public static CameraSettings ReadFrom(PXCMCapture.Device device)
+        {
+            CameraSettings result = new CameraSettings();
+            result.DepthConfidenceThreshold = device.QueryDepthConfidenceThreshold();
+            result.IVCAMAccuracy = (int)device.QueryIVCAMAccuracy();
+            result.IVCAMFilterOption = device.QueryIVCAMFilterOption();
+            result.IVCAMLaserPower = device.QueryIVCAMLaserPower();
+            result.IVCAMMotionRangeTradeOff = device.QueryIVCAMMotionRangeTradeOff();
+            result.changed = false;
+            return result;
+        }
+        public void WriteTo(PXCMCapture.Device device, CameraSettings oldSettings)
+        {
+            if (oldSettings.DepthConfidenceThreshold != DepthConfidenceThreshold)
+                device.SetDepthConfidenceThreshold(DepthConfidenceThreshold);
+            if (oldSettings.IVCAMAccuracy != IVCAMAccuracy)
+                device.SetIVCAMAccuracy((PXCMCapture.Device.IVCAMAccuracy)IVCAMAccuracy);
+            if (oldSettings.IVCAMFilterOption != IVCAMFilterOption)
+                device.SetIVCAMFilterOption(IVCAMFilterOption);
+            if (oldSettings.IVCAMLaserPower != IVCAMLaserPower)
+                device.SetIVCAMLaserPower(IVCAMLaserPower);
+            if (oldSettings.IVCAMMotionRangeTradeOff != IVCAMMotionRangeTradeOff)
+                device.SetIVCAMMotionRangeTradeOff(IVCAMMotionRangeTradeOff);
+            this.changed = false;
+        }
+
+        public static PXCMCapture.Device.PropertyInfo[] ReadPropInfo(PXCMCapture.Device device)
+        {
+            PXCMCapture.Device.PropertyInfo[] propInfo = new PXCMCapture.Device.PropertyInfo[5];
+            propInfo[0] = device.QueryDepthConfidenceThresholdInfo();
+            propInfo[1] = new PXCMCapture.Device.PropertyInfo() { range = { min = 0, max = 2 } }; //device.QueryIVCAMAccuracy();
+            propInfo[2] = device.QueryIVCAMFilterOptionInfo();
+            propInfo[3] = device.QueryIVCAMLaserPowerInfo();
+            propInfo[4] = device.QueryIVCAMMotionRangeTradeOffInfo();
+            return propInfo;
+        }
+
+        public void SetupTrackBars(System.Windows.Forms.TrackBar[] tb)
+        {
+            tb[0].Value = (int)this.DepthConfidenceThreshold;
+            tb[1].Value = (int)this.IVCAMAccuracy;
+            tb[2].Value = (int)this.IVCAMFilterOption;
+            tb[3].Value = (int)this.IVCAMLaserPower;
+            tb[4].Value = (int)this.IVCAMMotionRangeTradeOff;
+        }
+        public void SetupTrackBars(System.Windows.Forms.TrackBar[] tb, PXCMCapture.Device.PropertyInfo[] propInfo)
+        {
+            for (int i = 0; i < 5; ++i)
+            {
+                tb[i].Minimum = (int)propInfo[i].range.min;
+                tb[i].Maximum = (int)propInfo[i].range.max;
+            }
+            SetupTrackBars(tb);
+        }
+    }
 }
