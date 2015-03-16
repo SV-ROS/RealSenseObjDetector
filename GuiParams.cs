@@ -23,6 +23,11 @@ namespace raw_streams.cs
                 result.processParams.normalEstimationParams2.normalEstimatorMethod = managed_pcl.NormalEstimationMethod.COVARIANCE_MATRIX;
                 result.processParams.normalEstimationParams2.maxDepthChangeFactor = 0.001f;
                 result.processParams.normalEstimationParams2.normalSmoothingSize = 60.0f;
+                result.processParams.depthClustersParams.deltaDepthThreshold = 10;
+                result.processParams.depthClustersParams.halfWindowSize = 5;
+                result.processParams.depthClustersParams.ignoreInvalidDepth = false;
+                result.processParams.depthClustersParams.maxDepth = 1100;
+                result.processParams.depthClustersParams.minDepth = 100;
                 result.maxBadPixelQuality = 0.001f;
                 result.minGoodPixelQuality = 0.999f;
                 return result;
@@ -39,6 +44,17 @@ namespace raw_streams.cs
         public int IVCAMMotionRangeTradeOff;
         public bool changed;
 
+        public static CameraSettings ReadDefaultFrom(PXCMCapture.Device device)
+        {
+            CameraSettings result = new CameraSettings();
+            result.DepthConfidenceThreshold = (ushort)device.QueryDepthConfidenceThresholdInfo().defaultValue;
+            result.IVCAMAccuracy = (int)device.QueryIVCAMAccuracyDefaultValue();
+            result.IVCAMFilterOption = (int)device.QueryIVCAMFilterOptionInfo().defaultValue;
+            result.IVCAMLaserPower = (int)device.QueryIVCAMLaserPowerInfo().defaultValue;
+            result.IVCAMMotionRangeTradeOff = (int)device.QueryIVCAMMotionRangeTradeOffInfo().defaultValue;
+            result.changed = true;
+            return result;
+        }
         public static CameraSettings ReadFrom(PXCMCapture.Device device)
         {
             CameraSettings result = new CameraSettings();

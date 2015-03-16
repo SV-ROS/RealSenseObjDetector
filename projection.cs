@@ -52,6 +52,10 @@ namespace raw_streams.cs
             {
                 this.computePixelQualityFromDepth(depth);
             }
+            else if (processParams.qualityEstimationMethod == managed_pcl.QualityEstimationMethod.DepthClusters)
+            {
+                this.computePixelQualityFromDepthClusters(depth, processParams);
+            }
             else
             {
                 this.depthToScan(depth);
@@ -68,11 +72,17 @@ namespace raw_streams.cs
             for (int i = 0; i < numOfPixels; ++i)
             {
                 float pq = pixelQuality[i];
-                if (float.IsNaN(pq))
+                if ((float)managed_pcl.PixelQualitySpecialValue.NoData == pq)
                 { //: black:
                     pixelColors[4 * i + 0] = 0;
                     pixelColors[4 * i + 1] = 0;
                     pixelColors[4 * i + 2] = 0;
+                }
+                else if ((float)managed_pcl.PixelQualitySpecialValue.Boundary == pq)
+                { //: gray:
+                    pixelColors[4 * i + 0] = 128;
+                    pixelColors[4 * i + 1] = 128;
+                    pixelColors[4 * i + 2] = 128;
                 }
                 else if (pq <= 0)
                 { //: magenta:
@@ -148,7 +158,7 @@ namespace raw_streams.cs
                 for (int i = 0; i < numOfPixels; ++i)
                 {
                     if (pixelDepths[i] == this.invalid_value)
-                        pixelQuality[i] = float.NaN;
+                        pixelQuality[i] = (float)managed_pcl.PixelQualitySpecialValue.NoData;
                     else
                     {
                         float p = Math.Max(0.0f, (maxDepth - pixelDepths[i]) / delta);
@@ -160,12 +170,34 @@ namespace raw_streams.cs
                 setAllNan();
         }
 
+        private void computePixelQualityFromDepthClusters(PXCMImage depthImage, managed_pcl.ProcessParams processParams)
+        {
+            PXCMImage.ImageData depthImageData;
+            UInt16[] pixelDepths = null;
+            if (depthImage.AcquireAccess(PXCMImage.Access.ACCESS_READ, PXCMImage.PixelFormat.PIXEL_FORMAT_DEPTH, out depthImageData) >= pxcmStatus.PXCM_STATUS_NO_ERROR)
+            {
+                int width = (int)depthImageData.pitches[0] / sizeof(Int16);
+                int height = (int)depthImage.info.height;
+                pixelDepths = depthImageData.ToUShortArray(0, width * height);
+                System.Diagnostics.Debug.Assert(pixelDepths.Length == pixelQuality.Length);
+                depthImage.ReleaseAccess(depthImageData);
+                //minDepth = pixelDepths.Min(p => (p == this.invalid_value ? ushort.MaxValue : p));
+                //maxDepth = pixelDepths.Max();
+            }
+            if (pixelDepths != null) //minDepth < maxDepth)
+            {
+                scan.computePixelQualityFromDepthClusters(pixelDepths, this.invalid_value, pixelQuality, processParams.depthClustersParams);
+            }
+            else
+                setAllNan();
+        }
+
         private void setAllNan()
         {
             int numOfPixels = pixelQuality.Length;
             for (int i = 0; i < numOfPixels; ++i)
             {
-                pixelQuality[i] = float.NaN;
+                pixelQuality[i] = (float)managed_pcl.PixelQualitySpecialValue.NoData;
             }
         }
 

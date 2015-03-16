@@ -48,29 +48,20 @@ namespace raw_streams.cs
                 new object[] {"Curvature"
                         , "CurvatureStability"
                         , "DepthChange"
+                        , "DepthClusters"
                 });
-            this.comboBoxQualityEstimator.SelectedIndex = (int)guiParams.processParams.qualityEstimationMethod;
 
-            this.textBoxMaxDepthChangeFactor1.Text = guiParams.processParams.normalEstimationParams1.maxDepthChangeFactor.ToString();
-            this.textBoxNormalSmoothingSize1.Text = guiParams.processParams.normalEstimationParams1.normalSmoothingSize.ToString();
             this.comboBoxNormalEstimator1.Items.AddRange(
                 new object[] {"COVARIANCE_MATRIX"
                         , "AVERAGE_3D_GRADIENT"
                         , "AVERAGE_DEPTH_CHANGE"
                 });
-            this.comboBoxNormalEstimator1.SelectedIndex = (int)guiParams.processParams.normalEstimationParams1.normalEstimatorMethod;
 
-            this.textBoxMaxDepthChangeFactor2.Text = guiParams.processParams.normalEstimationParams2.maxDepthChangeFactor.ToString();
-            this.textBoxNormalSmoothingSize2.Text = guiParams.processParams.normalEstimationParams2.normalSmoothingSize.ToString();
             this.comboBoxNormalEstimator2.Items.AddRange(
                 new object[] {"COVARIANCE_MATRIX"
                         , "AVERAGE_3D_GRADIENT"
                         , "AVERAGE_DEPTH_CHANGE"
                 });
-            this.comboBoxNormalEstimator2.SelectedIndex = (int)guiParams.processParams.normalEstimationParams2.normalEstimatorMethod;
-
-            this.trackBarMaxBad.Value = (int)(1000f * guiParams.maxBadPixelQuality);
-            this.trackBarMinGood.Value = (int)(1000f * guiParams.minGoodPixelQuality);
 
             this.cameraSettingsTrackBars = new TrackBar[]
             {
@@ -81,10 +72,13 @@ namespace raw_streams.cs
                 this.trackBarCamIVCAMMotionRangeTradeOff
             };
 
+            this.resetAllParams();
         }
 
         private delegate void UpdateFromOtherThreadDelegate();
+        private delegate void UpdateStatusDelegate(string status);
 
+#region Properies and change state methods
         public bool IsSaveToPcdRequested()
         {
             return saveToPcdRequested;
@@ -114,6 +108,17 @@ namespace raw_streams.cs
                 )
             );
         }
+
+        public string GetFileName()
+        {
+            return filename;
+        }
+
+        public bool GetStopState()
+        {
+            return stop;
+        }
+
 
         internal GuiParams GetParams()
         {
@@ -148,6 +153,14 @@ namespace raw_streams.cs
             );
         }
 
+        public void UpdateStatus(string status)
+        {
+            Status2.Invoke(new UpdateStatusDelegate(delegate(string s) { StatusLabel.Text = s; }), new object[] { status });
+        }
+
+#endregion
+
+#region Menu and device config
         private void PopulateDeviceMenu()
         {
             devices.Clear();
@@ -352,49 +365,6 @@ namespace raw_streams.cs
             CheckSelection();
         }
 
-        private void Start_Click(object sender, EventArgs e)
-        {
-            stop = false;
-            System.Threading.Thread thread = new System.Threading.Thread(DoRendering);
-            thread.Start();
-            System.Threading.Thread.Sleep(5);
-        }
-
-        private void DoRendering()
-        {
-            try
-            {
-                this.Invoke(new UpdateFromOtherThreadDelegate(
-                    delegate
-                    {
-                        MainMenu.Enabled = false;
-                        Start.Enabled = false;
-                        Stop.Enabled = true;
-                        this.buttonSaveToPcd.Enabled = true;
-                    }
-                ));
-                RenderStreams rs = new RenderStreams(this);
-                rs.ShowStream();
-            }
-            catch (Exception e)
-            {
-                stop = true;
-                UpdateStatus("Exception: " + e.ToString());
-            }
-
-            this.Invoke(new UpdateFromOtherThreadDelegate(
-                delegate
-                {
-                    Start.Enabled = true;
-                    Stop.Enabled = false;
-                    buttonSaveToPcd.Enabled = false;
-                    MainMenu.Enabled = true;
-                    if (closing)
-                        Close();
-                }
-            ));
-        }
-
         public PXCMCapture.DeviceInfo GetCheckedDevice()
         {
             foreach (ToolStripMenuItem e in DeviceMenu.DropDownItems)
@@ -432,95 +402,10 @@ namespace raw_streams.cs
             return GetConfiguration(DepthMenu);
         }
 
-        private void MainForm_FormClosing(object sender, FormClosingEventArgs e)
-        {
-            stop = true;
-            e.Cancel = Stop.Enabled;
-            closing = true;
-        }
-
-        private delegate void UpdateStatusDelegate(string status);
-        public void UpdateStatus(string status)
-        {
-            Status2.Invoke(new UpdateStatusDelegate(delegate(string s) { StatusLabel.Text = s; }), new object[] { status });
-        }
-
-        private void Stop_Click(object sender, EventArgs e)
-        {
-            stop = true;
-        }
-
-        public void SetPicture(int width, int height, byte[] pixels)
-        {
-            if (pixels == null)
-                return;
-            lock (this)
-            {
-                pictureBitmap.SetPixels(width, height, pixels);
-            }
-        }
-
-        private static Rectangle getScaledRect(Rectangle rc, int w, int h)
-        {
-            float xscale = (float)rc.Width / (float)w;
-            float yscale = (float)rc.Height / (float)h;
-            float xyscale = (xscale < yscale) ? xscale : yscale;
-            int width = (int)(w * xyscale);
-            int height = (int)(h * xyscale);
-            rc.X = (rc.Width - width) / 2;
-            rc.Y = (rc.Height - height) / 2;
-            rc.Width = width;
-            rc.Height = height;
-            return rc;
-        }
-
-        private void pictureBitmap_Paint(object sender, PaintEventArgs e)
-        {
-            bool scaled = false;
-            lock (this)
-            {
-                try
-                {
-                    Bitmap bitmap = pictureBitmap.GetBitmap();
-                    if (bitmap == null)
-                        return;
-                    if (scaled)
-                    {
-                        /* Keep the aspect ratio */
-                        Rectangle rc = (sender as Control).ClientRectangle;
-                        rc = getScaledRect(rc, bitmap.Width, bitmap.Height);
-                        e.Graphics.DrawImage(bitmap, rc);
-                    }
-                    else
-                    {
-                        e.Graphics.DrawImageUnscaled(bitmap, 0, 0);
-                    }
-                }
-                catch (Exception excpt)
-                {
-                    stop = true;
-                    UpdateStatus("Exception: " + excpt.GetType().ToString());
-                }
-            }
-        }
-
-        public void UpdatePicture()
-        {
-            pictureBox1.Invoke(
-                new UpdateFromOtherThreadDelegate(
-                    delegate()
-                    {
-                        pictureBox1.Invalidate();
-                    }
-                )
-            );
-        }
-
         private void CheckSelection()
         {
             PXCMCapture.Device.StreamProfile dprofile = GetDepthConfiguration();
             //?DepthNone.Enabled = (cprofile.imageInfo.format != 0 || irprofile.imageInfo.format != 0);
-
 
             PXCMSession.ImplDesc desc = new PXCMSession.ImplDesc();
             desc.group = PXCMSession.ImplGroup.IMPL_GROUP_SENSOR;
@@ -570,17 +455,170 @@ namespace raw_streams.cs
             }
         }
 
-        public string GetFileName()
+#endregion
+
+#region Start, stop, etc
+        private void MainForm_FormClosing(object sender, FormClosingEventArgs e)
         {
-            return filename;
+            stop = true;
+            e.Cancel = Stop.Enabled;
+            closing = true;
         }
 
+        private void Start_Click(object sender, EventArgs e)
+        {
+            stop = false;
+            System.Threading.Thread thread = new System.Threading.Thread(DoRendering);
+            thread.Start();
+            System.Threading.Thread.Sleep(5);
+        }
+
+        private void Stop_Click(object sender, EventArgs e)
+        {
+            stop = true;
+        }
+
+        private void buttonSaveToPcd_Click(object sender, EventArgs e)
+        {
+            saveToPcdRequested = true;
+            this.buttonSaveToPcd.Enabled = false;
+        }
+
+        private void buttonSelectPcdFilePath_Click(object sender, EventArgs e)
+        {
+            using (System.Windows.Forms.FolderBrowserDialog selectFolderDlg = new FolderBrowserDialog())
+            {
+                selectFolderDlg.SelectedPath = this.pcdFilePath;
+                if (selectFolderDlg.ShowDialog() == System.Windows.Forms.DialogResult.OK)
+                {
+                    this.textBoxPcdFilePath.Text = this.pcdFilePath = selectFolderDlg.SelectedPath;
+                }
+            }
+        }
+
+#endregion
+
+#region Picture and rendering
+
+        public void SetPicture(int width, int height, byte[] pixels)
+        {
+            if (pixels == null)
+                return;
+            lock (this)
+            {
+                pictureBitmap.SetPixels(width, height, pixels);
+            }
+        }
+
+        public void UpdatePicture()
+        {
+            pictureBox1.Invoke(
+                new UpdateFromOtherThreadDelegate(
+                    delegate()
+                    {
+                        pictureBox1.Invalidate();
+                    }
+                )
+            );
+        }
+
+        private void DoRendering()
+        {
+            try
+            {
+                this.Invoke(new UpdateFromOtherThreadDelegate(
+                    delegate
+                    {
+                        MainMenu.Enabled = false;
+                        Start.Enabled = false;
+                        Stop.Enabled = true;
+                        this.buttonSaveToPcd.Enabled = true;
+                    }
+                ));
+                RenderStreams rs = new RenderStreams(this);
+                rs.ShowStream();
+            }
+            catch (Exception e)
+            {
+                stop = true;
+                UpdateStatus("Exception: " + e.ToString());
+            }
+
+            this.Invoke(new UpdateFromOtherThreadDelegate(
+                delegate
+                {
+                    Start.Enabled = true;
+                    Stop.Enabled = false;
+                    buttonSaveToPcd.Enabled = false;
+                    MainMenu.Enabled = true;
+                    if (closing)
+                        Close();
+                }
+            ));
+        }
+
+        private static Rectangle getScaledRect(Rectangle rc, int w, int h)
+        {
+            float xscale = (float)rc.Width / (float)w;
+            float yscale = (float)rc.Height / (float)h;
+            float xyscale = (xscale < yscale) ? xscale : yscale;
+            int width = (int)(w * xyscale);
+            int height = (int)(h * xyscale);
+            rc.X = (rc.Width - width) / 2;
+            rc.Y = (rc.Height - height) / 2;
+            rc.Width = width;
+            rc.Height = height;
+            return rc;
+        }
+
+        private void pictureBitmap_Paint(object sender, PaintEventArgs e)
+        {
+            bool scaled = false;
+            lock (this)
+            {
+                try
+                {
+                    Bitmap bitmap = pictureBitmap.GetBitmap();
+                    if (bitmap == null)
+                        return;
+                    if (scaled)
+                    {
+                        /* Keep the aspect ratio */
+                        Rectangle rc = (sender as Control).ClientRectangle;
+                        rc = getScaledRect(rc, bitmap.Width, bitmap.Height);
+                        e.Graphics.DrawImage(bitmap, rc);
+                    }
+                    else
+                    {
+                        e.Graphics.DrawImageUnscaled(bitmap, 0, 0);
+                    }
+                }
+                catch (Exception excpt)
+                {
+                    stop = true;
+                    UpdateStatus("Exception: " + excpt.GetType().ToString());
+                }
+            }
+        }
+
+        private void cleanPictureBitmap()
+        {
+            if (pictureBitmap != null)
+            {
+                pictureBitmap.Dispose();
+                pictureBitmap = null;
+            }
+        }
+
+#endregion
+
+#region Mode Live/Recorded
         public bool IsModeLive()
         {
             return ModeLive.Checked;
         }
 
-        public bool IsModeReocrd()
+        public bool IsModeRecorded()
         {
             return ModeRecord.Checked;
         }
@@ -598,14 +636,14 @@ namespace raw_streams.cs
             ofd.Filter = "RSSDK clip|*.rssdk|Old format clip|*.pcsdk|All files|*.*";
             ofd.CheckFileExists = true;
             ofd.CheckPathExists = true;
-            filename=(ofd.ShowDialog() == DialogResult.OK)?ofd.FileName:null;
+            filename = (ofd.ShowDialog() == DialogResult.OK) ? ofd.FileName : null;
             if (filename == null)
             {
                 ModeLive.Checked = true;
                 ModePlayback.Checked = ModeRecord.Checked = false;
                 PopulateDeviceMenu();
-            } 
-            else 
+            }
+            else
             {
                 ModePlayback.Checked = true;
                 ModeLive.Checked = ModeRecord.Checked = false;
@@ -628,35 +666,83 @@ namespace raw_streams.cs
             sfd.Filter = "RSSDK clip|*.rssdk|All files|*.*";
             sfd.CheckPathExists = true;
             sfd.OverwritePrompt = true;
-            sfd.AddExtension    = true;
+            sfd.AddExtension = true;
             filename = (sfd.ShowDialog() == DialogResult.OK) ? sfd.FileName : null;
         }
+        
+#endregion
 
-        public bool GetStopState()
+#region Common params UI
+        private void setupAllParamsCtls()
         {
-            return stop;
+            this.comboBoxQualityEstimator.SelectedIndex = (int)guiParams.processParams.qualityEstimationMethod;
+
+            bool isFirstNormalRequired = guiParams.processParams.qualityEstimationMethod == managed_pcl.QualityEstimationMethod.Curvature
+                || guiParams.processParams.qualityEstimationMethod == managed_pcl.QualityEstimationMethod.CurvatureStability;
+
+            this.buttonSaveToPcd.Enabled = isFirstNormalRequired;
+
+            this.comboBoxNormalEstimator1.Visible = isFirstNormalRequired;
+            if (isFirstNormalRequired)
+            {
+                this.label1.Text = "1st normal estimation method";
+                this.label2.Text = "1st normal max depth change factor";
+                this.label3.Text = "1st normal smoothing size";
+                this.textBoxMaxDepthChangeFactor1.Text = guiParams.processParams.normalEstimationParams1.maxDepthChangeFactor.ToString();
+                this.textBoxNormalSmoothingSize1.Text = guiParams.processParams.normalEstimationParams1.normalSmoothingSize.ToString();
+                this.comboBoxNormalEstimator1.SelectedIndex = (int)guiParams.processParams.normalEstimationParams1.normalEstimatorMethod;
+            }
+
+            bool isSecondNormalRequired = guiParams.processParams.qualityEstimationMethod == managed_pcl.QualityEstimationMethod.CurvatureStability;
+            this.comboBoxNormalEstimator2.Visible = isSecondNormalRequired;
+            this.textBoxMaxDepthChangeFactor2.Visible = isSecondNormalRequired;
+            this.textBoxNormalSmoothingSize2.Visible = isSecondNormalRequired;
+            this.label5.Visible = isSecondNormalRequired;
+            this.label6.Visible = isSecondNormalRequired;
+            this.label7.Visible = isSecondNormalRequired;
+
+            bool isDepthClusterParamssRequired = guiParams.processParams.qualityEstimationMethod == managed_pcl.QualityEstimationMethod.DepthClusters;
+            if (isDepthClusterParamssRequired)
+            {
+                this.label1.Text = "";
+                this.label2.Text = "Depth Clusters deltaDepthThreshold";
+                this.label3.Text = "Depth Clusters halfWindowSize";
+                this.textBoxMaxDepthChangeFactor1.Text = guiParams.processParams.depthClustersParams.deltaDepthThreshold.ToString();
+                this.textBoxNormalSmoothingSize1.Text = guiParams.processParams.depthClustersParams.halfWindowSize.ToString();
+            }
+            this.textBoxMaxDepthChangeFactor1.Visible = isFirstNormalRequired || isDepthClusterParamssRequired;
+            this.textBoxNormalSmoothingSize1.Visible = isFirstNormalRequired || isDepthClusterParamssRequired;
+            this.label1.Visible = isFirstNormalRequired || isDepthClusterParamssRequired;
+            this.label2.Visible = isFirstNormalRequired || isDepthClusterParamssRequired;
+            this.label3.Visible = isFirstNormalRequired || isDepthClusterParamssRequired;
+
+            this.textBoxMaxDepthChangeFactor2.Text = guiParams.processParams.normalEstimationParams2.maxDepthChangeFactor.ToString();
+            this.textBoxNormalSmoothingSize2.Text = guiParams.processParams.normalEstimationParams2.normalSmoothingSize.ToString();
+            this.comboBoxNormalEstimator2.SelectedIndex = (int)guiParams.processParams.normalEstimationParams2.normalEstimatorMethod;
+            this.trackBarMaxBad.Value = (int)(1000f * guiParams.maxBadPixelQuality);
+            this.trackBarMinGood.Value = (int)(1000f * guiParams.minGoodPixelQuality);
         }
 
-        private void buttonSaveToPcd_Click(object sender, EventArgs e)
+        private void resetAllParams()
         {
-            saveToPcdRequested = true;
-            this.buttonSaveToPcd.Enabled = false;
+            this.guiParams = GuiParams.Default;
+            this.setupAllParamsCtls();
         }
 
-        private void trackBarMaxBad_Scroll(object sender, EventArgs e)
+        private void buttonResetAllParams_Click(object sender, EventArgs e)
         {
-            if (trackBarMinGood.Value < trackBarMaxBad.Value)
-                trackBarMinGood.Value = trackBarMaxBad.Value;
-            guiParams.maxBadPixelQuality = 0.001f * trackBarMaxBad.Value;
+            this.resetAllParams();
         }
 
-        private void trackBarMinGood_Scroll(object sender, EventArgs e)
+        private void comboBoxQualityEstimator_SelectedIndexChanged(object sender, EventArgs e)
         {
-            if (trackBarMinGood.Value < trackBarMaxBad.Value)
-                trackBarMaxBad.Value = trackBarMinGood.Value;
-            guiParams.minGoodPixelQuality = 0.001f * trackBarMinGood.Value;
+            guiParams.processParams.qualityEstimationMethod = (managed_pcl.QualityEstimationMethod)this.comboBoxQualityEstimator.SelectedIndex;
+            this.setupAllParamsCtls();
         }
 
+#endregion
+
+#region First Normal or DepthClusters UI
         private void comboBoxNormalEstimator_SelectedIndexChanged(object sender, EventArgs e)
         {
             guiParams.processParams.normalEstimationParams1.normalEstimatorMethod = (managed_pcl.NormalEstimationMethod)comboBoxNormalEstimator1.SelectedIndex;
@@ -664,40 +750,25 @@ namespace raw_streams.cs
 
         private void textBoxMaxDepthChangeFactor_TextChanged(object sender, EventArgs e)
         {
-            float.TryParse(textBoxMaxDepthChangeFactor1.Text, out guiParams.processParams.normalEstimationParams1.maxDepthChangeFactor);
+            bool isDepthClusterParamssRequired = guiParams.processParams.qualityEstimationMethod == managed_pcl.QualityEstimationMethod.DepthClusters;
+            if (isDepthClusterParamssRequired)
+                int.TryParse(textBoxMaxDepthChangeFactor1.Text, out guiParams.processParams.depthClustersParams.deltaDepthThreshold);
+            else
+                float.TryParse(textBoxMaxDepthChangeFactor1.Text, out guiParams.processParams.normalEstimationParams1.maxDepthChangeFactor);
         }
 
         private void textBoxNormalSmoothingSize_TextChanged(object sender, EventArgs e)
         {
-            float.TryParse(textBoxNormalSmoothingSize1.Text, out guiParams.processParams.normalEstimationParams1.normalSmoothingSize);
+            bool isDepthClusterParamssRequired = guiParams.processParams.qualityEstimationMethod == managed_pcl.QualityEstimationMethod.DepthClusters;
+            if (isDepthClusterParamssRequired)
+                int.TryParse(textBoxNormalSmoothingSize1.Text, out guiParams.processParams.depthClustersParams.halfWindowSize);
+            else
+                float.TryParse(textBoxNormalSmoothingSize1.Text, out guiParams.processParams.normalEstimationParams1.normalSmoothingSize);
         }
+        
+#endregion
 
-        private void cleanPictureBitmap()
-        {
-            if (pictureBitmap != null)
-            {
-                pictureBitmap.Dispose();
-                pictureBitmap = null;
-            }
-        }
-
-        private void buttonSelectPcdFilePath_Click(object sender, EventArgs e)
-        {
-            using (System.Windows.Forms.FolderBrowserDialog selectFolderDlg = new FolderBrowserDialog())
-            {
-                selectFolderDlg.SelectedPath = this.pcdFilePath;
-                if (selectFolderDlg.ShowDialog() == System.Windows.Forms.DialogResult.OK)
-                {
-                    this.textBoxPcdFilePath.Text = this.pcdFilePath = selectFolderDlg.SelectedPath;
-                }
-            }
-        }
-
-        private void comboBoxQualityEstimator_SelectedIndexChanged(object sender, EventArgs e)
-        {
-            guiParams.processParams.qualityEstimationMethod = (managed_pcl.QualityEstimationMethod)this.comboBoxQualityEstimator.SelectedIndex;
-        }
-
+#region Second normal UI
         private void comboBoxNormalEstimator2_SelectedIndexChanged(object sender, EventArgs e)
         {
             guiParams.processParams.normalEstimationParams2.normalEstimatorMethod = (managed_pcl.NormalEstimationMethod)comboBoxNormalEstimator2.SelectedIndex;
@@ -713,6 +784,9 @@ namespace raw_streams.cs
             float.TryParse(textBoxNormalSmoothingSize2.Text, out guiParams.processParams.normalEstimationParams2.normalSmoothingSize);
         }
 
+#endregion
+
+#region Camera parameters UI
         private void trackBarCamDepthCofidenceThreshold_Scroll(object sender, EventArgs e)
         {
             this.cameraSettings.DepthConfidenceThreshold = (ushort)trackBarCamDepthCofidenceThreshold.Value;
@@ -743,6 +817,24 @@ namespace raw_streams.cs
             this.cameraSettings.IVCAMMotionRangeTradeOff = trackBarCamIVCAMMotionRangeTradeOff.Value;
             this.cameraSettings.changed = true;
         }
+#endregion
+
+
+#region Pixel quality range UI
+        private void trackBarMaxBad_Scroll(object sender, EventArgs e)
+        {
+            if (trackBarMinGood.Value < trackBarMaxBad.Value)
+                trackBarMinGood.Value = trackBarMaxBad.Value;
+            guiParams.maxBadPixelQuality = 0.001f * trackBarMaxBad.Value;
+        }
+
+        private void trackBarMinGood_Scroll(object sender, EventArgs e)
+        {
+            if (trackBarMinGood.Value < trackBarMaxBad.Value)
+                trackBarMaxBad.Value = trackBarMinGood.Value;
+            guiParams.minGoodPixelQuality = 0.001f * trackBarMinGood.Value;
+        }
+#endregion
 
     }
 }

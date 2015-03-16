@@ -15,7 +15,8 @@ namespace managed_pcl {
     {
       Curvature,
       CurvatureStability,
-      DepthChange
+      DepthChange,
+      DepthClusters
     };
 
     public enum class NormalEstimationMethod
@@ -32,11 +33,28 @@ namespace managed_pcl {
         float normalSmoothingSize;
     };
 
+    public enum class PixelQualitySpecialValue
+    {
+      Boundary = -2,
+      NoData = -3,
+      SmallCluster = -4,
+    };
+
+    public value struct DepthClustersParams
+    {
+        int halfWindowSize;
+        int deltaDepthThreshold;
+        bool ignoreInvalidDepth;
+        int minDepth;
+        int maxDepth;
+    };
+
     public value struct ProcessParams
     {
         QualityEstimationMethod qualityEstimationMethod;
         NormalEstimationParams normalEstimationParams1;
         NormalEstimationParams normalEstimationParams2;
+        DepthClustersParams depthClustersParams;
     };
 
     public ref class Scan : public System::IDisposable
@@ -67,6 +85,7 @@ namespace managed_pcl {
 
         void setCoords(cli::array<PXCMPoint3DF32, 1>^ coords);
         void computePixelQualityFromNormals(cli::array<System::Single, 1>^ result, ProcessParams params);
+        void computePixelQualityFromDepthClusters(cli::array<System::UInt16, 1>^ pixelDepths, System::UInt16 invalidDepthValue, cli::array<System::Single, 1>^ result, DepthClustersParams params);
         void saveToPcdFile(System::String^ xyzFileName, System::String^ normalsFileName, bool binary);
 
     private:

@@ -44,11 +44,11 @@ namespace raw_streams.cs
                     return;
                 }
                 if (!form.IsModeLive())
-                    pp.captureManager.SetFileName(form.GetFileName(), form.IsModeReocrd());
+                    pp.captureManager.SetFileName(form.GetFileName(), form.IsModeRecorded());
 
                 /* Set Input Source */
                 PXCMCapture.DeviceInfo dinfo2 = form.GetCheckedDevice();
-                if (form.IsModeLive() || form.IsModeReocrd())
+                if (form.IsModeLive() || form.IsModeRecorded())
                     pp.captureManager.FilterByDeviceInfo(dinfo2);
 
                 /* Set Depth Resolution */

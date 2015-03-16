@@ -84,6 +84,7 @@
             this.trackBarCamIVCAMFilterOption = new System.Windows.Forms.TrackBar();
             this.trackBarCamIVCAMLaserPower = new System.Windows.Forms.TrackBar();
             this.trackBarCamIVCAMMotionRangeTradeOff = new System.Windows.Forms.TrackBar();
+            this.buttonResetAllParams = new System.Windows.Forms.Button();
             this.MainMenu.SuspendLayout();
             this.Status2.SuspendLayout();
             this.tableLayoutPanel1.SuspendLayout();
@@ -220,6 +221,7 @@
             this.tableLayoutPanel1.Controls.Add(this.tableLayoutPanel2, 1, 0);
             this.tableLayoutPanel1.Controls.Add(this.pictureBox1, 0, 0);
             this.tableLayoutPanel1.Controls.Add(this.tableLayoutPanel9, 0, 1);
+            this.tableLayoutPanel1.Controls.Add(this.buttonResetAllParams, 1, 1);
             this.tableLayoutPanel1.Dock = System.Windows.Forms.DockStyle.Fill;
             this.tableLayoutPanel1.Location = new System.Drawing.Point(0, 24);
             this.tableLayoutPanel1.Name = "tableLayoutPanel1";
@@ -409,6 +411,7 @@
             this.comboBoxNormalEstimator1.Name = "comboBoxNormalEstimator1";
             this.comboBoxNormalEstimator1.Size = new System.Drawing.Size(121, 21);
             this.comboBoxNormalEstimator1.TabIndex = 0;
+            this.comboBoxNormalEstimator1.Visible = false;
             this.comboBoxNormalEstimator1.SelectedIndexChanged += new System.EventHandler(this.comboBoxNormalEstimator_SelectedIndexChanged);
             // 
             // label1
@@ -707,6 +710,16 @@
             this.trackBarCamIVCAMMotionRangeTradeOff.TabIndex = 11;
             this.trackBarCamIVCAMMotionRangeTradeOff.Scroll += new System.EventHandler(this.trackBarCamIVCAMMotionRangeTradeOff_Scroll);
             // 
+            // buttonResetAllParams
+            // 
+            this.buttonResetAllParams.Location = new System.Drawing.Point(651, 491);
+            this.buttonResetAllParams.Name = "buttonResetAllParams";
+            this.buttonResetAllParams.Size = new System.Drawing.Size(131, 23);
+            this.buttonResetAllParams.TabIndex = 3;
+            this.buttonResetAllParams.Text = "ResetAllParams";
+            this.buttonResetAllParams.UseVisualStyleBackColor = true;
+            this.buttonResetAllParams.Click += new System.EventHandler(this.buttonResetAllParams_Click);
+            // 
             // MainForm
             // 
             this.AutoScaleDimensions = new System.Drawing.SizeF(6F, 13F);
@@ -810,5 +823,6 @@
         private System.Windows.Forms.TrackBar trackBarCamIVCAMFilterOption;
         private System.Windows.Forms.TrackBar trackBarCamIVCAMLaserPower;
         private System.Windows.Forms.TrackBar trackBarCamIVCAMMotionRangeTradeOff;
+        private System.Windows.Forms.Button buttonResetAllParams;
     }
 }

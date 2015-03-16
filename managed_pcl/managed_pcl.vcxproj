@@ -101,7 +101,7 @@
     <Link>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <AdditionalDependencies>pcl_io_debug.lib;pcl_common_debug.lib;pcl_features_debug.lib;pcl_search_debug.lib</AdditionalDependencies>
-      <AdditionalLibraryDirectories>$(PCL_DIR)\lib;$(BOOST_ROOT)\lib64;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalLibraryDirectories>$(PCL_DIR)-debug\lib;$(BOOST_ROOT)\lib64;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
