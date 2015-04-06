@@ -16,7 +16,7 @@ namespace raw_streams.cs
             get
             {
                 GuiParams result = new GuiParams();
-                result.processParams.qualityEstimationMethod = managed_pcl.QualityEstimationMethod.Curvature;
+                result.processParams.qualityEstimationMethod = managed_pcl.QualityEstimationMethod.DepthClusters;
                 result.processParams.normalEstimationParams1.normalEstimatorMethod = managed_pcl.NormalEstimationMethod.COVARIANCE_MATRIX;
                 result.processParams.normalEstimationParams1.maxDepthChangeFactor = 0.001f;
                 result.processParams.normalEstimationParams1.normalSmoothingSize = 6.0f;
@@ -28,6 +28,7 @@ namespace raw_streams.cs
                 result.processParams.depthClustersParams.ignoreInvalidDepth = false;
                 result.processParams.depthClustersParams.maxDepth = 1100;
                 result.processParams.depthClustersParams.minDepth = 100;
+                result.processParams.depthClustersParams.minNumOfPixelsInBestCluster =200;
                 result.maxBadPixelQuality = 0.001f;
                 result.minGoodPixelQuality = 0.999f;
                 return result;

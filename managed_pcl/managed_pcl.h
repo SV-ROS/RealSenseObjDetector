@@ -13,10 +13,10 @@ namespace managed_pcl {
 
     public enum class QualityEstimationMethod
     {
+      DepthClusters,
       Curvature,
       CurvatureStability,
-      DepthChange,
-      DepthClusters
+      DepthChange
     };
 
     public enum class NormalEstimationMethod
@@ -47,6 +47,7 @@ namespace managed_pcl {
         bool ignoreInvalidDepth;
         int minDepth;
         int maxDepth;
+        int minNumOfPixelsInBestCluster;
     };
 
     public value struct ProcessParams
@@ -55,6 +56,39 @@ namespace managed_pcl {
         NormalEstimationParams normalEstimationParams1;
         NormalEstimationParams normalEstimationParams2;
         DepthClustersParams depthClustersParams;
+    };
+
+    public value struct XyzCoords
+    {
+        float x;
+        float y;
+        float z;
+    };
+
+    public value struct XyzBox
+    {
+		bool valid;
+        XyzCoords xyzMin;
+        XyzCoords xyzMax;
+
+		void addPoint(float x, float y, float z)
+		{
+			if(valid)
+			{
+				xyzMin.x = System::Math::Min(xyzMin.x, x);
+				xyzMax.x = System::Math::Max(xyzMax.x, x);
+				xyzMin.y = System::Math::Min(xyzMin.y, y);
+				xyzMax.y = System::Math::Max(xyzMax.y, y);
+				xyzMin.z = System::Math::Min(xyzMin.z, z);
+				xyzMax.z = System::Math::Max(xyzMax.z, z);
+			}
+			else
+			{
+				xyzMin.x = xyzMax.x = x;
+				xyzMin.y = xyzMax.y = y;
+				xyzMin.z = xyzMax.z = z;
+			}
+		}
     };
 
     public ref class Scan : public System::IDisposable
@@ -83,7 +117,12 @@ namespace managed_pcl {
             int get() { return height_; }
         }
 
-        void setCoords(cli::array<PXCMPoint3DF32, 1>^ coords);
+		property XyzBox BBox
+		{
+			XyzBox get() { return bbox_; }
+		}
+
+		void setCoords(cli::array<PXCMPoint3DF32, 1>^ coords);
         void computePixelQualityFromNormals(cli::array<System::Single, 1>^ result, ProcessParams params);
         void computePixelQualityFromDepthClusters(cli::array<System::UInt16, 1>^ pixelDepths, System::UInt16 invalidDepthValue, cli::array<System::Single, 1>^ result, DepthClustersParams params);
         void saveToPcdFile(System::String^ xyzFileName, System::String^ normalsFileName, bool binary);
@@ -96,6 +135,7 @@ namespace managed_pcl {
         unmanaged_impl::ScanImpl* impl_;
         int width_;
         int height_;
+		XyzBox bbox_;
     };
 
 }

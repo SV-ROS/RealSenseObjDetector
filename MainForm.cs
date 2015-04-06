@@ -45,10 +45,10 @@ namespace raw_streams.cs
             this.textBoxPcdFilePath.Text = this.pcdFilePath;
 
             this.comboBoxQualityEstimator.Items.AddRange(
-                new object[] {"Curvature"
+                new object[] {"DepthClusters"
+                        , "Curvature"
                         , "CurvatureStability"
                         , "DepthChange"
-                        , "DepthClusters"
                 });
 
             this.comboBoxNormalEstimator1.Items.AddRange(
@@ -230,8 +230,7 @@ namespace raw_streams.cs
                     throw null;
                 if (pp.QueryCaptureManager().LocateStreams() < pxcmStatus.PXCM_STATUS_NO_ERROR)
                     throw null;
-                if (pp.QueryCaptureManager().QueryDevice().QueryDeviceInfo(out dinfo) < pxcmStatus.PXCM_STATUS_NO_ERROR)
-                    throw null;
+                pp.QueryCaptureManager().QueryDevice().QueryDeviceInfo(out dinfo);
             }
             catch
             {

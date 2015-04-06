@@ -54,6 +54,7 @@ namespace raw_streams.cs
             }
             else if (processParams.qualityEstimationMethod == managed_pcl.QualityEstimationMethod.DepthClusters)
             {
+                this.depthToScan(depth);
                 this.computePixelQualityFromDepthClusters(depth, processParams);
             }
             else

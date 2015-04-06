@@ -99,242 +99,242 @@ namespace umanaged_pcl {
 
 namespace unmanaged_impl {
 
-    struct Frame
-    {
-        int width;
-        int height;
-        int size;
+    //struct Frame
+    //{
+    //    int width;
+    //    int height;
+    //    int size;
 
-        Frame(int w, int h)
-            : width(w)
-            , height(h)
-            , size(w * h)
-        {
-        }
+    //    Frame(int w, int h)
+    //        : width(w)
+    //        , height(h)
+    //        , size(w * h)
+    //    {
+    //    }
 
-        int getIndex(int column, int row) const {
-            return row * height + column;
-        }
-    };
+    //    int getIndex(int column, int row) const {
+    //        return row * height + column;
+    //    }
+    //};
 
-    typedef uint16_t RawZ;
-    typedef int ClusterIndex;
+    //typedef uint16_t RawZ;
+    //typedef int ClusterIndex;
 
-    enum {
-        c_FakeRootIndex = -1,
-        c_BoundaryIndex = -2,
-        c_NoDataIndex = -3,
-    };
-
-    struct ZCluster {
-        ClusterIndex parentClusterIndex;
-        int numOfPixels;
-        RawZ minZ;
-        RawZ maxZ;
-        uint64_t zSum;
-
-        bool isBoundaryCluster() const {
-            return parentClusterIndex == c_BoundaryIndex;
-        }
-        bool isNoDataCluster() const {
-            return parentClusterIndex == c_NoDataIndex;
-        }
-        bool isTopCluster() const {
-            return parentClusterIndex == c_FakeRootIndex;
-        }
-        bool isRegularIntermediateCluster() const {
-            return parentClusterIndex >= 0;
-        }
-    };
-
-    class ZClusters : public Frame
-    {
-    public:
-        ZClusters(int w, int h)
-            : Frame(w, h)
-            , clusters_(w * h)
-        {
-        }
-
-        void setData(RawZ const* zValues, RawZ invalidZValue, int halfWindowSize, RawZ deltaThreshold, bool ignoreInvalidZ) {
-            invalidZValue_ = invalidZValue;
-            this->doInitCusters(zValues);
-            this->mergeClusters(zValues, halfWindowSize, deltaThreshold, ignoreInvalidZ);
-        }
-
-        ZCluster const& getPixelCluster(int pixelIndex) const {
-            return clusters_.at(pixelIndex);
-        }
-
-    private:
-        void setPixel(ZCluster& inplaceResult, RawZ z) {
-            inplaceResult.parentClusterIndex = (z != invalidZValue_) ? c_FakeRootIndex : c_NoDataIndex;
-            inplaceResult.numOfPixels = 1;
-            inplaceResult.minZ = z;
-            inplaceResult.maxZ = z;
-            inplaceResult.zSum = z;
-        }
-        void resetSpecialClusters() {
-            allClustersStatistics_.parentClusterIndex = c_FakeRootIndex;
-            allClustersStatistics_.numOfPixels = 0;
-            allClustersStatistics_.minZ = (RawZ)(-1);
-            allClustersStatistics_.maxZ = (RawZ)(0);
-            allClustersStatistics_.zSum = 0;
-
-            boundaryCluster_.parentClusterIndex = c_BoundaryIndex;
-            boundaryCluster_.numOfPixels = 0;
-            boundaryCluster_.minZ = (RawZ)(-1);
-            boundaryCluster_.maxZ = (RawZ)(0);
-            boundaryCluster_.zSum = 0;
-        }
-
-        ClusterIndex getTopClusterIndex(ClusterIndex aClusterIndex) const {
-            assert(aClusterIndex >= 0);
-            ClusterIndex result = aClusterIndex;
-            while(clusters_[result].isRegularIntermediateCluster()) {
-                result = clusters_[result].parentClusterIndex;
-            }
-            return result;
-        }
-
-        void doInitCusters(RawZ const* zValues) {
-            for(int i = 0; i < this->size; i++) {
-                this->setPixel(clusters_.at(i), zValues[i]);
-            }
-            this->resetSpecialClusters();
-        }
-
-        static RawZ getDeltaZ(RawZ z1, RawZ z2) {
-            return (z1 > z2) ? z1 - z2 : z2 - z1;
-        }
-
-        static void doMergeClustersData(ZCluster& parentCluster, ZCluster const& childCluster) {
-            parentCluster.numOfPixels += childCluster.numOfPixels;
-            parentCluster.minZ = std::min(parentCluster.minZ, childCluster.minZ);
-            parentCluster.maxZ = std::max(parentCluster.maxZ, childCluster.maxZ);
-            parentCluster.zSum += childCluster.zSum;
-        }
-
-        void mergeTopClusters(ClusterIndex parentClusterIndex, ClusterIndex childClusterIndex) {
-            assert(parentClusterIndex < childClusterIndex);
-            ZCluster& parentCluster = clusters_[parentClusterIndex];
-            ZCluster& childCluster = clusters_[childClusterIndex];
-            childCluster.parentClusterIndex = parentClusterIndex;
-            //: update parent cluster data
-            doMergeClustersData(parentCluster, childCluster);
-            //: update common statistics:
-            doMergeClustersData(allClustersStatistics_, childCluster);
-        }
-
-        void mergeNeighborClusters(ClusterIndex aClusterIndex1, ClusterIndex aClusterIndex2) {
-            assert(aClusterIndex1 >= 0 && aClusterIndex2 >= 0);
-            ClusterIndex topClusterIndex1 = getTopClusterIndex(aClusterIndex1);
-            ClusterIndex topClusterIndex2 = getTopClusterIndex(aClusterIndex2);
-            ClusterIndex parentClusterIndex = std::min(topClusterIndex1, topClusterIndex2);
-            ClusterIndex childClusterIndex = std::max(topClusterIndex1, topClusterIndex2);
-            //: to awoid cycles always merge toward smaller index:
-            //: streamline the links to the top clusters:
-            if(parentClusterIndex != clusters_[aClusterIndex1].parentClusterIndex)
-                clusters_[aClusterIndex1].parentClusterIndex = parentClusterIndex;
-            if(parentClusterIndex != clusters_[aClusterIndex2].parentClusterIndex)
-                clusters_[aClusterIndex2].parentClusterIndex = parentClusterIndex;
-            if(topClusterIndex1 == topClusterIndex2)
-                //: nothing to do: the clusters already merged;
-                return;
-            mergeTopClusters(parentClusterIndex, childClusterIndex);
-        }
-
-        void setBoundaryPixel(ZCluster& pixelCluster, RawZ pixelDepth) {
-            pixelCluster.parentClusterIndex = c_BoundaryIndex;
-            boundaryCluster_.numOfPixels += 1;
-            boundaryCluster_.minZ = std::min(boundaryCluster_.minZ, pixelDepth);
-            boundaryCluster_.maxZ = std::max(boundaryCluster_.maxZ, pixelDepth);
-            boundaryCluster_.zSum += pixelDepth;
-        }
-
-        bool checkAndProcessBoundaryPixel(RawZ const* zValues, int column, int row, int centerPixelIndex, int halfWindowSize, RawZ deltaThreshold, bool ignoreInvalidZ) {
-            RawZ centerPixelDepth = zValues[centerPixelIndex];
-            int rowStart = std::max(0, row - halfWindowSize);
-            int rowEnd = std::min(row + halfWindowSize + 1, this->height);
-            int colStart = std::max(0, column - halfWindowSize);
-            int colEnd = std::min(column + halfWindowSize + 1, this->width);
-            for(int iRow = rowStart; iRow < rowEnd; ++iRow) {
-                for(int iColumn = colStart; iColumn < colEnd; ++iColumn) {
-                    int index = this->getIndex(iRow, iColumn);
-                    if(index >= centerPixelIndex)
-                        continue;
-                    RawZ pixelDepth = zValues[index];
-                    bool isBoundary = !ignoreInvalidZ && (pixelDepth == invalidZValue_)
-                        || deltaThreshold <= getDeltaZ(pixelDepth, centerPixelDepth);
-                    if(isBoundary) {
-                        this->setBoundaryPixel(clusters_[centerPixelIndex], centerPixelDepth);
-                        return true;
-                    }
-                }
-            }
-            return false;
-        }
-
-        void processRegularPixel(RawZ const* zValues, int column, int row, int centerPixelIndex, int halfWindowSize) {
-            //: otherwise merge the neighbor clusters with smaller indices in the window:
-            int rowStart = std::max(0, row - halfWindowSize);
-            int rowEnd = std::min(row + halfWindowSize + 1, this->height);
-            int colStart = std::max(0, column - halfWindowSize);
-            int colEnd = std::min(column + halfWindowSize + 1, this->width);
-            for(int iRow = rowStart; iRow < rowEnd; ++iRow) {
-                for(int iColumn = colStart; iColumn < colEnd; ++iColumn) {
-                    int index = this->getIndex(iRow, iColumn);
-                    if(index >= centerPixelIndex)
-                        continue;
-                    if(zValues[index] != invalidZValue_) {
-                        this->mergeNeighborClusters(index, centerPixelIndex);
-                    }
-                }
-            }
-        }
-
-        void mergeClusters(RawZ const* zValues, int halfWindowSize, RawZ deltaThreshold, bool ignoreInvalidZ) {
-            for(int row = 0, i = 0; row < this->height; ++row) {
-                for(int column = 0; column < this->width; ++column, ++i) {
-                    if(zValues[i] == invalidZValue_)
-                        //: skip pixels with unknown depth value:
-                        continue;
-                    if(this->checkAndProcessBoundaryPixel(zValues, column, row, i, halfWindowSize, deltaThreshold, ignoreInvalidZ))
-                        //: the pixel is on a bounday and is already processed in this->checkAndProcessBoundaryPixel(...)
-                        continue;
-                    //: process regular pixel:
-                    this->processRegularPixel(zValues, column, row, i, halfWindowSize);
-                }
-            }
-            this->countTopClusters();
-        }
-
-        void countTopClusters() {
-            numOfTopClusters_ = 0;
-            for(ClusterIndex i = 0; i < this->size; ++i) {
-                ZCluster& cluster = clusters_[i];
-                if(cluster.isTopCluster()) {
-                    //: count a top cluster:
-                    ++numOfTopClusters_;
-                    //?cluster.parentClusterIndex = i;
-                } else if(cluster.isRegularIntermediateCluster()) {
-                    //: streamline ref to top cluster:
-                    cluster.parentClusterIndex = getTopClusterIndex(i);
-                }
-            }
-        }
-
-    private:
-        typedef std::vector<ZCluster> Clusters;
-
-        RawZ invalidZValue_;
-
-        Clusters clusters_;
-        ZCluster allClustersStatistics_;
-        ZCluster boundaryCluster_;
-        std::size_t numOfTopClusters_;
-    };
-
+//    enum {
+//        c_FakeRootIndex = -1,
+//        c_BoundaryIndex = -2,
+//        c_NoDataIndex = -3,
+//    };
+//
+//    struct ZCluster {
+//        ClusterIndex parentClusterIndex;
+//        int numOfPixels;
+//        RawZ minZ;
+//        RawZ maxZ;
+//        uint64_t zSum;
+//
+//        bool isBoundaryCluster() const {
+//            return parentClusterIndex == c_BoundaryIndex;
+//        }
+//        bool isNoDataCluster() const {
+//            return parentClusterIndex == c_NoDataIndex;
+//        }
+//        bool isTopCluster() const {
+//            return parentClusterIndex == c_FakeRootIndex;
+//        }
+//        bool isRegularIntermediateCluster() const {
+//            return parentClusterIndex >= 0;
+//        }
+//    };
+//
+//    class ZClusters : public Frame
+//    {
+//    public:
+//        ZClusters(int w, int h)
+//            : Frame(w, h)
+//            , clusters_(w * h)
+//        {
+//        }
+//
+//        void setData(RawZ const* zValues, RawZ invalidZValue, int halfWindowSize, RawZ deltaThreshold, bool ignoreInvalidZ) {
+//            invalidZValue_ = invalidZValue;
+//            this->doInitCusters(zValues);
+//            this->mergeClusters(zValues, halfWindowSize, deltaThreshold, ignoreInvalidZ);
+//        }
+//
+//        ZCluster const& getPixelCluster(int pixelIndex) const {
+//            return clusters_.at(pixelIndex);
+//        }
+//
+//    private:
+//        void setPixel(ZCluster& inplaceResult, RawZ z) {
+//            inplaceResult.parentClusterIndex = (z != invalidZValue_) ? c_FakeRootIndex : c_NoDataIndex;
+//            inplaceResult.numOfPixels = 1;
+//            inplaceResult.minZ = z;
+//            inplaceResult.maxZ = z;
+//            inplaceResult.zSum = z;
+//        }
+//        void resetSpecialClusters() {
+//            allClustersStatistics_.parentClusterIndex = c_FakeRootIndex;
+//            allClustersStatistics_.numOfPixels = 0;
+//            allClustersStatistics_.minZ = (RawZ)(-1);
+//            allClustersStatistics_.maxZ = (RawZ)(0);
+//            allClustersStatistics_.zSum = 0;
+//
+//            boundaryCluster_.parentClusterIndex = c_BoundaryIndex;
+//            boundaryCluster_.numOfPixels = 0;
+//            boundaryCluster_.minZ = (RawZ)(-1);
+//            boundaryCluster_.maxZ = (RawZ)(0);
+//            boundaryCluster_.zSum = 0;
+//        }
+//
+//        ClusterIndex getTopClusterIndex(ClusterIndex aClusterIndex) const {
+//            assert(aClusterIndex >= 0);
+//            ClusterIndex result = aClusterIndex;
+//            while(clusters_[result].isRegularIntermediateCluster()) {
+//                result = clusters_[result].parentClusterIndex;
+//            }
+//            return result;
+//        }
+//
+//        void doInitCusters(RawZ const* zValues) {
+//            for(int i = 0; i < this->size; i++) {
+//                this->setPixel(clusters_.at(i), zValues[i]);
+//            }
+//            this->resetSpecialClusters();
+//        }
+//
+//        static RawZ getDeltaZ(RawZ z1, RawZ z2) {
+//            return (z1 > z2) ? z1 - z2 : z2 - z1;
+//        }
+//
+//        static void doMergeClustersData(ZCluster& parentCluster, ZCluster const& childCluster) {
+//            parentCluster.numOfPixels += childCluster.numOfPixels;
+//            parentCluster.minZ = std::min(parentCluster.minZ, childCluster.minZ);
+//            parentCluster.maxZ = std::max(parentCluster.maxZ, childCluster.maxZ);
+//            parentCluster.zSum += childCluster.zSum;
+//        }
+//
+//        void mergeTopClusters(ClusterIndex parentClusterIndex, ClusterIndex childClusterIndex) {
+//            assert(parentClusterIndex < childClusterIndex);
+//            ZCluster& parentCluster = clusters_[parentClusterIndex];
+//            ZCluster& childCluster = clusters_[childClusterIndex];
+//            childCluster.parentClusterIndex = parentClusterIndex;
+//            //: update parent cluster data
+//            doMergeClustersData(parentCluster, childCluster);
+//            //: update common statistics:
+//            doMergeClustersData(allClustersStatistics_, childCluster);
+//        }
+//
+//        void mergeNeighborClusters(ClusterIndex aClusterIndex1, ClusterIndex aClusterIndex2) {
+//            assert(aClusterIndex1 >= 0 && aClusterIndex2 >= 0);
+//            ClusterIndex topClusterIndex1 = getTopClusterIndex(aClusterIndex1);
+//            ClusterIndex topClusterIndex2 = getTopClusterIndex(aClusterIndex2);
+//            ClusterIndex parentClusterIndex = std::min(topClusterIndex1, topClusterIndex2);
+//            ClusterIndex childClusterIndex = std::max(topClusterIndex1, topClusterIndex2);
+//            //: to awoid cycles always merge toward smaller index:
+//            //: streamline the links to the top clusters:
+//            if(parentClusterIndex != clusters_[aClusterIndex1].parentClusterIndex)
+//                clusters_[aClusterIndex1].parentClusterIndex = parentClusterIndex;
+//            if(parentClusterIndex != clusters_[aClusterIndex2].parentClusterIndex)
+//                clusters_[aClusterIndex2].parentClusterIndex = parentClusterIndex;
+//            if(topClusterIndex1 == topClusterIndex2)
+//                //: nothing to do: the clusters already merged;
+//                return;
+//            mergeTopClusters(parentClusterIndex, childClusterIndex);
+//        }
+//
+//        void setBoundaryPixel(ZCluster& pixelCluster, RawZ pixelDepth) {
+//            pixelCluster.parentClusterIndex = c_BoundaryIndex;
+//            boundaryCluster_.numOfPixels += 1;
+//            boundaryCluster_.minZ = std::min(boundaryCluster_.minZ, pixelDepth);
+//            boundaryCluster_.maxZ = std::max(boundaryCluster_.maxZ, pixelDepth);
+//            boundaryCluster_.zSum += pixelDepth;
+//        }
+//
+//        bool checkAndProcessBoundaryPixel(RawZ const* zValues, int column, int row, int centerPixelIndex, int halfWindowSize, RawZ deltaThreshold, bool ignoreInvalidZ) {
+//            RawZ centerPixelDepth = zValues[centerPixelIndex];
+//            int rowStart = std::max(0, row - halfWindowSize);
+//            int rowEnd = std::min(row + halfWindowSize + 1, this->height);
+//            int colStart = std::max(0, column - halfWindowSize);
+//            int colEnd = std::min(column + halfWindowSize + 1, this->width);
+//            for(int iRow = rowStart; iRow < rowEnd; ++iRow) {
+//                for(int iColumn = colStart; iColumn < colEnd; ++iColumn) {
+//                    int index = this->getIndex(iRow, iColumn);
+//                    if(index >= centerPixelIndex)
+//                        continue;
+//                    RawZ pixelDepth = zValues[index];
+//                    bool isBoundary = !ignoreInvalidZ && (pixelDepth == invalidZValue_)
+//                        || deltaThreshold <= getDeltaZ(pixelDepth, centerPixelDepth);
+//                    if(isBoundary) {
+//                        this->setBoundaryPixel(clusters_[centerPixelIndex], centerPixelDepth);
+//                        return true;
+//                    }
+//                }
+//            }
+//            return false;
+//        }
+//
+//        void processRegularPixel(RawZ const* zValues, int column, int row, int centerPixelIndex, int halfWindowSize) {
+//            //: otherwise merge the neighbor clusters with smaller indices in the window:
+//            int rowStart = std::max(0, row - halfWindowSize);
+//            int rowEnd = std::min(row + halfWindowSize + 1, this->height);
+//            int colStart = std::max(0, column - halfWindowSize);
+//            int colEnd = std::min(column + halfWindowSize + 1, this->width);
+//            for(int iRow = rowStart; iRow < rowEnd; ++iRow) {
+//                for(int iColumn = colStart; iColumn < colEnd; ++iColumn) {
+//                    int index = this->getIndex(iRow, iColumn);
+//                    if(index >= centerPixelIndex)
+//                        continue;
+//                    if(zValues[index] != invalidZValue_) {
+//                        this->mergeNeighborClusters(index, centerPixelIndex);
+//                    }
+//                }
+//            }
+//        }
+//
+//        void mergeClusters(RawZ const* zValues, int halfWindowSize, RawZ deltaThreshold, bool ignoreInvalidZ) {
+//            for(int row = 0, i = 0; row < this->height; ++row) {
+//                for(int column = 0; column < this->width; ++column, ++i) {
+//                    if(zValues[i] == invalidZValue_)
+//                        //: skip pixels with unknown depth value:
+//                        continue;
+//                    if(this->checkAndProcessBoundaryPixel(zValues, column, row, i, halfWindowSize, deltaThreshold, ignoreInvalidZ))
+//                        //: the pixel is on a bounday and is already processed in this->checkAndProcessBoundaryPixel(...)
+//                        continue;
+//                    //: process regular pixel:
+//                    this->processRegularPixel(zValues, column, row, i, halfWindowSize);
+//                }
+//            }
+//            this->countTopClusters();
+//        }
+//
+//        void countTopClusters() {
+//            numOfTopClusters_ = 0;
+//            for(ClusterIndex i = 0; i < this->size; ++i) {
+//                ZCluster& cluster = clusters_[i];
+//                if(cluster.isTopCluster()) {
+//                    //: count a top cluster:
+//                    ++numOfTopClusters_;
+//                    //?cluster.parentClusterIndex = i;
+//                } else if(cluster.isRegularIntermediateCluster()) {
+//                    //: streamline ref to top cluster:
+//                    cluster.parentClusterIndex = getTopClusterIndex(i);
+//                }
+//            }
+//        }
+//
+//    private:
+//        typedef std::vector<ZCluster> Clusters;
+//
+//        RawZ invalidZValue_;
+//
+//        Clusters clusters_;
+//        ZCluster allClustersStatistics_;
+//        ZCluster boundaryCluster_;
+//        std::size_t numOfTopClusters_;
+//    };
+//
 
     struct ScanImpl {
     public:
@@ -342,14 +342,14 @@ namespace unmanaged_impl {
             : scan(w, h)
             , normals1(w, h)
             , normals2(w, h)
-            , zClusters(w, h)
+            //, zClusters(w, h)
         {
         }
 
         umanaged_pcl::ScanXyz scan;
         umanaged_pcl::ScanNormal normals1;
         umanaged_pcl::ScanNormal normals2;
-        ZClusters zClusters;
+        //ZClusters zClusters;
     };
 
 } // namespace unmanaged_impl
@@ -417,17 +417,33 @@ namespace managed_impl {
         ZClusters(int w, int h)
             : Frame(w, h)
             , clusters_(w * h)
+            , bestClusterIndex_(-1)
         {
         }
 
-        void setData(RawZ const* zValues, RawZ invalidZValue, int halfWindowSize, RawZ deltaThreshold, bool ignoreInvalidZ) {
+        void setData(RawZ const* zValues, RawZ invalidZValue, int halfWindowSize, RawZ deltaThreshold, bool ignoreInvalidZ, int minNumOfPixelsInBestCluster) {
             invalidZValue_ = invalidZValue;
+            minNumOfPixelsInBestCluster_ = minNumOfPixelsInBestCluster;
             this->doInitCusters(zValues);
             this->mergeClusters(zValues, halfWindowSize, deltaThreshold, ignoreInvalidZ);
         }
 
         ZCluster const& getPixelCluster(int pixelIndex) const {
+            pixelIndex = getTopClusterIndex(pixelIndex);
             return clusters_.at(pixelIndex);
+        }
+
+        ClusterIndex getTopClusterIndex(ClusterIndex aClusterIndex) const {
+            assert(aClusterIndex >= 0);
+            ClusterIndex result = aClusterIndex;
+            while(clusters_[result].isRegularIntermediateCluster()) {
+                result = clusters_[result].parentClusterIndex;
+            }
+            return result;
+        }
+
+        ZCluster const* getBestClusterPtr() const {
+            return bestClusterIndex_ == -1 ? 0 : &clusters_.at(bestClusterIndex_);
         }
 
     private:
@@ -534,28 +550,33 @@ namespace managed_impl {
             }
         }
 
+        int compareClusterWithTopCluster(ClusterIndex aClusterIndex) const {
+            ZCluster const& cluster = clusters_[aClusterIndex];
+            bool ok = cluster.numOfPixels > minNumOfPixelsInBestCluster_;
+            if(ok && bestClusterIndex_ != -1) {
+                ZCluster const& best_cluster = clusters_[bestClusterIndex_];
+                ok = best_cluster.minZ > cluster.minZ;
+                ok = ok || (best_cluster.minZ >= 1 + cluster.minZ && best_cluster.numOfPixels < cluster.numOfPixels);
+            }
+            return ok ? aClusterIndex : bestClusterIndex_;
+        }
+
         void countTopClusters() {
             numOfTopClusters_ = 0;
+            bestClusterIndex_ = -1;
             for(ClusterIndex i = 0; i < this->size; ++i) {
                 ZCluster& cluster = clusters_[i];
                 if(cluster.isTopCluster()) {
                     //: count a top cluster:
                     ++numOfTopClusters_;
+                    //: check if the cluster is the top custer:
+                    bestClusterIndex_ = compareClusterWithTopCluster(i);
                     //?cluster.parentClusterIndex = i;
                 } else if(cluster.isRegularIntermediateCluster()) {
                     //: streamline ref to top cluster:
                     cluster.parentClusterIndex = getTopClusterIndex(i);
                 }
             }
-        }
-
-        ClusterIndex getTopClusterIndex(ClusterIndex aClusterIndex) const {
-            assert(aClusterIndex >= 0);
-            ClusterIndex result = aClusterIndex;
-            while(clusters_[result].isRegularIntermediateCluster()) {
-                result = clusters_[result].parentClusterIndex;
-            }
-            return result;
         }
 
         static RawZ getDeltaZ(RawZ z1, RawZ z2) {
@@ -616,11 +637,13 @@ namespace managed_impl {
         typedef std::vector<ZCluster> Clusters;
 
         RawZ invalidZValue_;
+        int minNumOfPixelsInBestCluster_;
 
         Clusters clusters_;
         ZCluster allClustersStatistics_;
         ZCluster boundaryCluster_;
         std::size_t numOfTopClusters_;
+        ClusterIndex bestClusterIndex_;
     };
 
 
@@ -689,34 +712,45 @@ void Scan::computePixelQualityFromNormals(cli::array<System::Single, 1>^ result,
     }
 }
 
-inline float getPixelQuality(unmanaged_impl::RawZ maxDepth, unmanaged_impl::RawZ depth, float delta) {
+inline float getPixelQuality(managed_impl::RawZ maxDepth, managed_impl::RawZ depth, float delta) {
     float q = std::max(0.0f, (maxDepth - depth) / delta);
     return q * q * q;
 }
 
 void Scan::computePixelQualityFromDepthClusters(cli::array<System::UInt16, 1>^ pixelDepths, System::UInt16 invalidDepthValue, cli::array<System::Single, 1>^ result, DepthClustersParams params) {
     static managed_impl::ZClusters zClusters(width_, height_);
+	bbox_.valid = false;
     int length = result->Length;
     assert(length == width_ * height_);
     assert(pixelDepths->Length == width_ * height_);
     cli::pin_ptr<System::UInt16> pixelDepthsPtr = &pixelDepths[0];   //: pin pointer to first element in arr
     managed_impl::RawZ const* nativePixelDepthsPtr = pixelDepthsPtr;
-    zClusters.setData(nativePixelDepthsPtr, invalidDepthValue, params.halfWindowSize, params.deltaDepthThreshold, params.ignoreInvalidDepth);
+    zClusters.setData(nativePixelDepthsPtr, invalidDepthValue, params.halfWindowSize, params.deltaDepthThreshold, params.ignoreInvalidDepth, params.minNumOfPixelsInBestCluster);
     float delta = (float)(params.maxDepth - params.minDepth);
-    for(int i = 0; i < length; ++i) {
-        managed_impl::ZCluster const& pixelCluster = zClusters.getPixelCluster(i);
-        if(pixelCluster.isBoundaryCluster()) {
-            result[i] = (float)(PixelQualitySpecialValue::Boundary);
-        } else if(pixelCluster.isNoDataCluster()) {
-            result[i] = (float)(PixelQualitySpecialValue::NoData);
-        } else if(pixelCluster.isTopCluster()) {
-            result[i] = getPixelQuality(params.maxDepth, pixelCluster.minZ, delta);
-        } else if(pixelCluster.isRegularIntermediateCluster()) {
-            managed_impl::ZCluster const& parentCluster = zClusters.getPixelCluster(pixelCluster.parentClusterIndex);
-            result[i] = getPixelQuality(params.maxDepth, parentCluster.minZ, delta);
-        } else
-            assert(false);
-    }
+    managed_impl::ZCluster const* bestCluster = zClusters.getBestClusterPtr();
+    //for(int i = 0; i < length; ++i) {
+    for(int row = 0, i = 0; row < height_; ++row) {
+        for(int column = 0; column < width_; ++column, ++i) {
+			managed_impl::ZCluster const& pixelCluster = zClusters.getPixelCluster(i);
+			if(pixelCluster.isBoundaryCluster()) {
+				result[i] = (float)(PixelQualitySpecialValue::Boundary);
+			} else if(pixelCluster.isNoDataCluster()) {
+				result[i] = (float)(PixelQualitySpecialValue::NoData);
+			} else if(bestCluster == &pixelCluster) {
+				result[i] = 1;
+				bbox_.addPoint(impl_->scan.getPclCloud().at(column, row).x, impl_->scan.getPclCloud().at(column, row).y, impl_->scan.getPclCloud().at(column, row).z);
+			} else {
+				result[i] = getPixelQuality(params.maxDepth, pixelCluster.minZ, delta);
+			}
+			//} else if(pixelCluster.isTopCluster()) {
+			//    result[i] = getPixelQuality(params.maxDepth, pixelCluster.minZ, delta);
+			//} else if(pixelCluster.isRegularIntermediateCluster()) {
+			//    managed_impl::ZCluster const& parentCluster = zClusters.getTopClusterIndex(pixelCluster.parentClusterIndex);
+			//    result[i] = getPixelQuality(params.maxDepth, parentCluster.minZ, delta);
+			//} else
+			//    assert(false);
+		}
+	}
 }
 
 void Scan::saveToPcdFile(System::String^ xyzFileName, System::String^ normalsFileName, bool binary) {
