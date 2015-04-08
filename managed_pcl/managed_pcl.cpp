@@ -513,6 +513,21 @@ namespace managed_impl {
                     }
                 }
             }
+            //: check for concavity: to avoid clasters 'spit' to background let's treat vertically concave pixels as border pixels:
+            ////int halfWindowSize1 = std::min(row - rowStart, rowEnd - row - 1);
+            ////for(int iRow = row - halfWindowSize1; iRow < row; ++iRow) {
+            ////    int index = this->getIndex(column, iRow);
+            ////    RawZ pixel_depth = zValues[index];
+            ////    int opposite_index = this->getIndex(column, 2 * row - iRow);
+            ////    RawZ opposite_pixel_depth = zValues[opposite_index];
+            ////    bool isInvalidZ = (pixel_depth == invalidZValue_ || opposite_pixel_depth == invalidZValue_);
+            ////    double k = 1.1; //3./2; //fixme: add to params?
+            ////    bool isBoundary = !isInvalidZ && (k * (row - iRow) <= centerPixelDepth - (pixel_depth + opposite_pixel_depth) / 2);
+            ////    if(isBoundary) {
+            ////        return true;
+            ////    }
+            ////}
+
             return false;
         }
 
@@ -719,7 +734,7 @@ inline float getPixelQuality(managed_impl::RawZ maxDepth, managed_impl::RawZ dep
 
 void Scan::computePixelQualityFromDepthClusters(cli::array<System::UInt16, 1>^ pixelDepths, System::UInt16 invalidDepthValue, cli::array<System::Single, 1>^ result, DepthClustersParams params) {
     static managed_impl::ZClusters zClusters(width_, height_);
-	bbox_.valid = false;
+    bbox_.valid = false;
     int length = result->Length;
     assert(length == width_ * height_);
     assert(pixelDepths->Length == width_ * height_);
@@ -731,26 +746,26 @@ void Scan::computePixelQualityFromDepthClusters(cli::array<System::UInt16, 1>^ p
     //for(int i = 0; i < length; ++i) {
     for(int row = 0, i = 0; row < height_; ++row) {
         for(int column = 0; column < width_; ++column, ++i) {
-			managed_impl::ZCluster const& pixelCluster = zClusters.getPixelCluster(i);
-			if(pixelCluster.isBoundaryCluster()) {
-				result[i] = (float)(PixelQualitySpecialValue::Boundary);
-			} else if(pixelCluster.isNoDataCluster()) {
-				result[i] = (float)(PixelQualitySpecialValue::NoData);
-			} else if(bestCluster == &pixelCluster) {
-				result[i] = 1;
-				bbox_.addPoint(impl_->scan.getPclCloud().at(column, row).x, impl_->scan.getPclCloud().at(column, row).y, impl_->scan.getPclCloud().at(column, row).z);
-			} else {
-				result[i] = getPixelQuality(params.maxDepth, pixelCluster.minZ, delta);
-			}
-			//} else if(pixelCluster.isTopCluster()) {
-			//    result[i] = getPixelQuality(params.maxDepth, pixelCluster.minZ, delta);
-			//} else if(pixelCluster.isRegularIntermediateCluster()) {
-			//    managed_impl::ZCluster const& parentCluster = zClusters.getTopClusterIndex(pixelCluster.parentClusterIndex);
-			//    result[i] = getPixelQuality(params.maxDepth, parentCluster.minZ, delta);
-			//} else
-			//    assert(false);
-		}
-	}
+            managed_impl::ZCluster const& pixelCluster = zClusters.getPixelCluster(i);
+            if(pixelCluster.isBoundaryCluster()) {
+                result[i] = (float)(PixelQualitySpecialValue::Boundary);
+            } else if(pixelCluster.isNoDataCluster()) {
+                result[i] = (float)(PixelQualitySpecialValue::NoData);
+            } else if(bestCluster == &pixelCluster) {
+                result[i] = 1;
+                bbox_.addPoint(impl_->scan.getPclCloud().at(column, row).x, impl_->scan.getPclCloud().at(column, row).y, impl_->scan.getPclCloud().at(column, row).z);
+            } else {
+                result[i] = getPixelQuality(params.maxDepth, pixelCluster.minZ, delta);
+            }
+            //} else if(pixelCluster.isTopCluster()) {
+            //    result[i] = getPixelQuality(params.maxDepth, pixelCluster.minZ, delta);
+            //} else if(pixelCluster.isRegularIntermediateCluster()) {
+            //    managed_impl::ZCluster const& parentCluster = zClusters.getTopClusterIndex(pixelCluster.parentClusterIndex);
+            //    result[i] = getPixelQuality(params.maxDepth, parentCluster.minZ, delta);
+            //} else
+            //    assert(false);
+        }
+    }
 }
 
 void Scan::saveToPcdFile(System::String^ xyzFileName, System::String^ normalsFileName, bool binary) {

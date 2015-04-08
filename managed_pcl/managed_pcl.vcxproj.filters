@@ -13,6 +13,9 @@
       <UniqueIdentifier>{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}</UniqueIdentifier>
       <Extensions>rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tiff;tif;png;wav;mfcribbon-ms</Extensions>
     </Filter>
+    <Filter Include="ros_ser">
+      <UniqueIdentifier>{bbc475fe-bab4-45e8-a485-d61bb39a63e0}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="managed_pcl.h">
@@ -24,6 +27,15 @@
     <ClInclude Include="resource.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="..\ros_lib\ros.h">
+      <Filter>ros_ser</Filter>
+    </ClInclude>
+    <ClInclude Include="..\ros_lib\WindowsSocket.h">
+      <Filter>ros_ser</Filter>
+    </ClInclude>
+    <ClInclude Include="..\ros_lib\added4vc10.h">
+      <Filter>ros_ser</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="managed_pcl.cpp">
@@ -34,6 +46,15 @@
     </ClCompile>
     <ClCompile Include="Stdafx.cpp">
       <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\ros_lib\duration.cpp">
+      <Filter>ros_ser</Filter>
+    </ClCompile>
+    <ClCompile Include="..\ros_lib\time.cpp">
+      <Filter>ros_ser</Filter>
+    </ClCompile>
+    <ClCompile Include="..\ros_lib\WindowsSocket.cpp">
+      <Filter>ros_ser</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
