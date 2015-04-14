@@ -142,8 +142,10 @@
     <ClInclude Include="..\ros_lib\ros.h" />
     <ClInclude Include="..\ros_lib\WindowsSocket.h" />
     <ClInclude Include="managed_pcl.h" />
+    <ClInclude Include="managed_ros_ser.h" />
     <ClInclude Include="resource.h" />
     <ClInclude Include="Stdafx.h" />
+    <ClInclude Include="utils.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\ros_lib\duration.cpp" />
@@ -151,12 +153,14 @@
     <ClCompile Include="..\ros_lib\WindowsSocket.cpp" />
     <ClCompile Include="AssemblyInfo.cpp" />
     <ClCompile Include="managed_pcl.cpp" />
+    <ClCompile Include="managed_ros_ser.cpp" />
     <ClCompile Include="Stdafx.cpp">
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Create</PrecompiledHeader>
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Create</PrecompiledHeader>
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">Create</PrecompiledHeader>
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Create</PrecompiledHeader>
     </ClCompile>
+    <ClCompile Include="utils.cpp" />
   </ItemGroup>
   <ItemGroup>
     <None Include="app.ico" />

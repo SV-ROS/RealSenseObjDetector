@@ -5,6 +5,7 @@
 #include "stdafx.h"
 
 #include "managed_pcl.h"
+#include "utils.h"
 
 #include <cassert>
 
@@ -59,15 +60,16 @@ namespace umanaged_pcl {
         //}
 
         void setPoint(int column, int row, float x, float y, float z) {
+            static const float scale = 1000.0f;
             PclPoint& p = cloud_ptr_->at(column, row);
             if(z == 0.0f) { //: exact zero means invalid in Intel RealSense SDK; qnan means invalid in pcl
                 p.x = std::numeric_limits<float>::quiet_NaN();
                 p.y = std::numeric_limits<float>::quiet_NaN();
                 p.z = std::numeric_limits<float>::quiet_NaN();
             } else { //: convert coords to meters to avoid confusion
-                p.x = x / 100.0f;
-                p.y = y / 100.0f;
-                p.z = z / 100.0f;
+                p.x = x / scale;
+                p.y = y / scale;
+                p.z = z / scale;
             }
         }
 
@@ -666,18 +668,6 @@ namespace managed_impl {
 
 namespace managed_pcl {
 
-std::string toStdString(System::String ^ s) {
-    if(System::String::IsNullOrEmpty(s))
-        return std::string();
-    using namespace System;
-    using namespace System::Runtime::InteropServices;
-    const char* chars = 
-        (const char*)(Marshal::StringToHGlobalAnsi(s)).ToPointer();
-    std::string res = chars;
-    Marshal::FreeHGlobal(IntPtr((void*)chars));
-    return res;
-}
-
 
 void Scan::setCoords(cli::array<PXCMPoint3DF32, 1>^ coords) {
     int length = coords->Length;
@@ -753,7 +743,7 @@ void Scan::computePixelQualityFromDepthClusters(cli::array<System::UInt16, 1>^ p
                 result[i] = (float)(PixelQualitySpecialValue::NoData);
             } else if(bestCluster == &pixelCluster) {
                 result[i] = 1;
-                bbox_.addPoint(impl_->scan.getPclCloud().at(column, row).x, impl_->scan.getPclCloud().at(column, row).y, impl_->scan.getPclCloud().at(column, row).z);
+                bbox_.addPoint(impl_->scan.getPclCloud().at(column, row).x, impl_->scan.getPclCloud().at(column, row).y, impl_->scan.getPclCloud().at(column, row).z, row, column);
             } else {
                 result[i] = getPixelQuality(params.maxDepth, pixelCluster.minZ, delta);
             }
@@ -769,10 +759,10 @@ void Scan::computePixelQualityFromDepthClusters(cli::array<System::UInt16, 1>^ p
 }
 
 void Scan::saveToPcdFile(System::String^ xyzFileName, System::String^ normalsFileName, bool binary) {
-    std::string xyzFileNameInUtf8 = toStdString(xyzFileName);
+    std::string xyzFileNameInUtf8 = utils::toStdString(xyzFileName);
     if(!xyzFileNameInUtf8.empty())
         impl_->scan.saveToPcdFile(xyzFileNameInUtf8, binary);
-    std::string normalsFileNameInUtf8 = toStdString(normalsFileName);
+    std::string normalsFileNameInUtf8 = utils::toStdString(normalsFileName);
     if(!normalsFileNameInUtf8.empty())
         impl_->normals1.saveToPcdFile(normalsFileNameInUtf8, binary);
 }

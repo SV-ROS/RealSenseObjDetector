@@ -16,15 +16,24 @@ namespace raw_streams.cs
         private PXCMPoint3DF32[] coords;
         private float[] pixelQuality;
         private byte[] pixelColors;
+        int height = 0;
+        int width = 0;
+
+        private managed_ros_ser.PosPublisher rosPublisher = new managed_ros_ser.PosPublisher();
 
         public Projection(PXCMSession session, PXCMCapture.Device device, PXCMImage.ImageInfo dinfo)
         {
-            /* retrieve the invalid depth pixel values */
+            //: start ros serial node:
+            rosPublisher.start("192.168.0.10");
+
+            //: retrieve the invalid depth pixel values
             invalid_value = device.QueryDepthLowConfidenceValue();
 
             /* Create the projection instance */
             projection = device.CreateProjection();
 
+            height = dinfo.height;
+            width = dinfo.width;
             int numOfPixels = dinfo.width * dinfo.height;
             scan = new managed_pcl.Scan(dinfo.width, dinfo.height);
             coords = new PXCMPoint3DF32[numOfPixels];
@@ -34,6 +43,11 @@ namespace raw_streams.cs
 
         public void Dispose()
         {
+            if (rosPublisher != null)
+            {
+                rosPublisher.Dispose();
+                rosPublisher = null;
+            }
             if (projection != null)
             {
                 projection.Dispose();
@@ -117,6 +131,26 @@ namespace raw_streams.cs
                     pixelColors[4 * i + 2] = (byte)(255.0 * (1.0 - w));
                 }
             }
+            //: top point:
+            if (scan.BBox.valid)
+            {
+                int halfPatchSize = 5;
+                int topRow = scan.TopPosRow;
+                int topColumn = scan.TopPosColumn;
+                int rowStart = Math.Max(0, topRow - halfPatchSize);
+                int rowEnd = Math.Min(topRow + halfPatchSize + 1, this.height);
+                int colStart = Math.Max(0, topColumn - halfPatchSize);
+                int colEnd = Math.Min(topColumn + halfPatchSize + 1, this.width);
+                for(int iRow = rowStart; iRow < rowEnd; ++iRow) {
+                    for(int iColumn = colStart; iColumn < colEnd; ++iColumn) {
+                        int index = iRow * width + iColumn;
+                        //: magenta:
+                        pixelColors[4 * index + 0] = 255;
+                        pixelColors[4 * index + 1] = 0;
+                        pixelColors[4 * index + 2] = 255;
+                    }
+                }
+            }
             return pixelColors;
         }
 
@@ -188,6 +222,9 @@ namespace raw_streams.cs
             if (pixelDepths != null) //minDepth < maxDepth)
             {
                 scan.computePixelQualityFromDepthClusters(pixelDepths, this.invalid_value, pixelQuality, processParams.depthClustersParams);
+                managed_pcl.XyzBox bbox = scan.BBox;
+                if (rosPublisher.isStarted() && bbox.valid)
+                    rosPublisher.publishPose(bbox.TopPos.x, bbox.TopPos.y, bbox.TopPos.z);
             }
             else
                 setAllNan();

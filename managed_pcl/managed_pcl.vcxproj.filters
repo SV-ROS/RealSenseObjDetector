@@ -36,6 +36,12 @@
     <ClInclude Include="..\ros_lib\added4vc10.h">
       <Filter>ros_ser</Filter>
     </ClInclude>
+    <ClInclude Include="managed_ros_ser.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="utils.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="managed_pcl.cpp">
@@ -55,6 +61,12 @@
     </ClCompile>
     <ClCompile Include="..\ros_lib\WindowsSocket.cpp">
       <Filter>ros_ser</Filter>
+    </ClCompile>
+    <ClCompile Include="managed_ros_ser.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="utils.cpp">
+      <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>

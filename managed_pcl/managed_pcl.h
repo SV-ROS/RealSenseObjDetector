@@ -65,30 +65,108 @@ namespace managed_pcl {
         float z;
     };
 
+    public value struct XyzRcCoords
+    {
+        float x;
+        float y;
+        float z;
+        int row;
+        int column;
+    };
+
     public value struct XyzBox
     {
-		bool valid;
-        XyzCoords xyzMin;
-        XyzCoords xyzMax;
+        bool valid;
 
-		void addPoint(float x, float y, float z)
-		{
-			if(valid)
-			{
-				xyzMin.x = System::Math::Min(xyzMin.x, x);
-				xyzMax.x = System::Math::Max(xyzMax.x, x);
-				xyzMin.y = System::Math::Min(xyzMin.y, y);
-				xyzMax.y = System::Math::Max(xyzMax.y, y);
-				xyzMin.z = System::Math::Min(xyzMin.z, z);
-				xyzMax.z = System::Math::Max(xyzMax.z, z);
-			}
-			else
-			{
-				xyzMin.x = xyzMax.x = x;
-				xyzMin.y = xyzMax.y = y;
-				xyzMin.z = xyzMax.z = z;
-			}
-		}
+        XyzRcCoords xyzMinXPos;
+        XyzRcCoords xyzMaxXPos;
+        XyzRcCoords xyzMinYPos;
+        XyzRcCoords xyzMaxYPos;
+        XyzRcCoords xyzMinZPos;
+        XyzRcCoords xyzMaxZPos;
+
+        property XyzRcCoords TopPos
+        {
+            XyzRcCoords get() { return xyzMinZPos; }
+        }
+        property XyzCoords MinXyz
+        {
+            XyzCoords get() {
+                XyzCoords res;
+                res.x = xyzMinXPos.x;
+                res.y = xyzMinYPos.y;
+                res.z = xyzMinZPos.z;
+                return res;
+            }
+        }
+        property XyzCoords MaxXyz
+        {
+            XyzCoords get() {
+                XyzCoords res;
+                res.x = xyzMaxXPos.x;
+                res.y = xyzMaxYPos.y;
+                res.z = xyzMaxZPos.z;
+                return res;
+            }
+        }
+
+        void addPoint(float x, float y, float z, int row, int column)
+        {
+            if(valid)
+            {
+                if(x < xyzMinXPos.x) {
+                    xyzMinXPos.row = row;
+                    xyzMinXPos.column = column;
+                    xyzMinXPos.x = x;
+                    xyzMinXPos.y = y;
+                    xyzMinXPos.z = z;
+                }
+                if(x > xyzMaxXPos.x) {
+                    xyzMaxXPos.row = row;
+                    xyzMaxXPos.column = column;
+                    xyzMaxXPos.x = x;
+                    xyzMaxXPos.y = y;
+                    xyzMaxXPos.z = z;
+                }
+                if(y < xyzMinYPos.y) {
+                    xyzMinYPos.row = row;
+                    xyzMinYPos.column = column;
+                    xyzMinYPos.x = x;
+                    xyzMinYPos.y = y;
+                    xyzMinYPos.z = z;
+                }
+                if(y > xyzMaxYPos.y) {
+                    xyzMaxYPos.row = row;
+                    xyzMaxYPos.column = column;
+                    xyzMaxYPos.x = x;
+                    xyzMaxYPos.y = y;
+                    xyzMaxYPos.z = z;
+                }
+                if(z < xyzMinZPos.z) {
+                    xyzMinZPos.row = row;
+                    xyzMinZPos.column = column;
+                    xyzMinZPos.x = x;
+                    xyzMinZPos.y = y;
+                    xyzMinZPos.z = z;
+                }
+                if(z > xyzMaxZPos.z) {
+                    xyzMaxZPos.row = row;
+                    xyzMaxZPos.column = column;
+                    xyzMaxZPos.x = x;
+                    xyzMaxZPos.y = y;
+                    xyzMaxZPos.z = z;
+                }
+            }
+            else
+            {
+                xyzMinXPos.row = xyzMaxXPos.row = xyzMinYPos.row = xyzMaxYPos.row = xyzMinZPos.row = xyzMaxZPos.row = row;
+                xyzMinXPos.column = xyzMaxXPos.column = xyzMinYPos.column = xyzMaxYPos.column = xyzMinZPos.column = xyzMaxZPos.column = column;
+                xyzMinXPos.x = xyzMaxXPos.x = xyzMinYPos.x = xyzMaxYPos.x = xyzMinZPos.x = xyzMaxZPos.x = x;
+                xyzMinXPos.y = xyzMaxXPos.y = xyzMinYPos.y = xyzMaxYPos.y = xyzMinZPos.y = xyzMaxZPos.y = y;
+                xyzMinXPos.z = xyzMaxXPos.z = xyzMinYPos.z = xyzMaxYPos.z = xyzMinZPos.z = xyzMaxZPos.z = z;
+                valid = true;
+            }
+        }
     };
 
     public ref class Scan : public System::IDisposable
@@ -117,12 +195,24 @@ namespace managed_pcl {
             int get() { return height_; }
         }
 
-		property XyzBox BBox
-		{
-			XyzBox get() { return bbox_; }
-		}
+        property XyzBox BBox
+        {
+            XyzBox get() { return bbox_; }
+        }
+        property XyzRcCoords TopPos
+        {
+            XyzRcCoords get() { return bbox_.TopPos; }
+        }
+        property int TopPosRow
+        {
+            int get() { return bbox_.TopPos.row; }
+        }
+        property int TopPosColumn
+        {
+            int get() { return bbox_.TopPos.column; }
+        }
 
-		void setCoords(cli::array<PXCMPoint3DF32, 1>^ coords);
+        void setCoords(cli::array<PXCMPoint3DF32, 1>^ coords);
         void computePixelQualityFromNormals(cli::array<System::Single, 1>^ result, ProcessParams params);
         void computePixelQualityFromDepthClusters(cli::array<System::UInt16, 1>^ pixelDepths, System::UInt16 invalidDepthValue, cli::array<System::Single, 1>^ result, DepthClustersParams params);
         void saveToPcdFile(System::String^ xyzFileName, System::String^ normalsFileName, bool binary);
@@ -135,7 +225,7 @@ namespace managed_pcl {
         unmanaged_impl::ScanImpl* impl_;
         int width_;
         int height_;
-		XyzBox bbox_;
+        XyzBox bbox_;
     };
 
 }
