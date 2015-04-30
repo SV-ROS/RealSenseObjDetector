@@ -14,6 +14,7 @@ namespace managed_pcl {
     public enum class QualityEstimationMethod
     {
       DepthClusters,
+      ColorClusters,
       Curvature,
       CurvatureStability,
       DepthChange
@@ -50,12 +51,22 @@ namespace managed_pcl {
         int minNumOfPixelsInBestCluster;
     };
 
+    public value struct ColorClustersParams
+    {
+        int halfWindowSize;
+        int colorDistanceThreshold;
+        int minDepth;
+        int maxDepth;
+        int minNumOfPixelsInBestCluster;
+    };
+
     public value struct ProcessParams
     {
         QualityEstimationMethod qualityEstimationMethod;
         NormalEstimationParams normalEstimationParams1;
         NormalEstimationParams normalEstimationParams2;
         DepthClustersParams depthClustersParams;
+        ColorClustersParams colorClustersParams;
     };
 
     public value struct XyzCoords
@@ -65,108 +76,23 @@ namespace managed_pcl {
         float z;
     };
 
-    public value struct XyzRcCoords
+    public value struct RcCoords
     {
-        float x;
-        float y;
-        float z;
         int row;
         int column;
     };
 
-    public value struct XyzBox
+    typedef uint8_t uint8;
+    typedef uint16_t RawDepth;
+
+    public value struct RgbIrDXyzPoint
     {
-        bool valid;
-
-        XyzRcCoords xyzMinXPos;
-        XyzRcCoords xyzMaxXPos;
-        XyzRcCoords xyzMinYPos;
-        XyzRcCoords xyzMaxYPos;
-        XyzRcCoords xyzMinZPos;
-        XyzRcCoords xyzMaxZPos;
-
-        property XyzRcCoords TopPos
-        {
-            XyzRcCoords get() { return xyzMinZPos; }
-        }
-        property XyzCoords MinXyz
-        {
-            XyzCoords get() {
-                XyzCoords res;
-                res.x = xyzMinXPos.x;
-                res.y = xyzMinYPos.y;
-                res.z = xyzMinZPos.z;
-                return res;
-            }
-        }
-        property XyzCoords MaxXyz
-        {
-            XyzCoords get() {
-                XyzCoords res;
-                res.x = xyzMaxXPos.x;
-                res.y = xyzMaxYPos.y;
-                res.z = xyzMaxZPos.z;
-                return res;
-            }
-        }
-
-        void addPoint(float x, float y, float z, int row, int column)
-        {
-            if(valid)
-            {
-                if(x < xyzMinXPos.x) {
-                    xyzMinXPos.row = row;
-                    xyzMinXPos.column = column;
-                    xyzMinXPos.x = x;
-                    xyzMinXPos.y = y;
-                    xyzMinXPos.z = z;
-                }
-                if(x > xyzMaxXPos.x) {
-                    xyzMaxXPos.row = row;
-                    xyzMaxXPos.column = column;
-                    xyzMaxXPos.x = x;
-                    xyzMaxXPos.y = y;
-                    xyzMaxXPos.z = z;
-                }
-                if(y < xyzMinYPos.y) {
-                    xyzMinYPos.row = row;
-                    xyzMinYPos.column = column;
-                    xyzMinYPos.x = x;
-                    xyzMinYPos.y = y;
-                    xyzMinYPos.z = z;
-                }
-                if(y > xyzMaxYPos.y) {
-                    xyzMaxYPos.row = row;
-                    xyzMaxYPos.column = column;
-                    xyzMaxYPos.x = x;
-                    xyzMaxYPos.y = y;
-                    xyzMaxYPos.z = z;
-                }
-                if(z < xyzMinZPos.z) {
-                    xyzMinZPos.row = row;
-                    xyzMinZPos.column = column;
-                    xyzMinZPos.x = x;
-                    xyzMinZPos.y = y;
-                    xyzMinZPos.z = z;
-                }
-                if(z > xyzMaxZPos.z) {
-                    xyzMaxZPos.row = row;
-                    xyzMaxZPos.column = column;
-                    xyzMaxZPos.x = x;
-                    xyzMaxZPos.y = y;
-                    xyzMaxZPos.z = z;
-                }
-            }
-            else
-            {
-                xyzMinXPos.row = xyzMaxXPos.row = xyzMinYPos.row = xyzMaxYPos.row = xyzMinZPos.row = xyzMaxZPos.row = row;
-                xyzMinXPos.column = xyzMaxXPos.column = xyzMinYPos.column = xyzMaxYPos.column = xyzMinZPos.column = xyzMaxZPos.column = column;
-                xyzMinXPos.x = xyzMaxXPos.x = xyzMinYPos.x = xyzMaxYPos.x = xyzMinZPos.x = xyzMaxZPos.x = x;
-                xyzMinXPos.y = xyzMaxXPos.y = xyzMinYPos.y = xyzMaxYPos.y = xyzMinZPos.y = xyzMaxZPos.y = y;
-                xyzMinXPos.z = xyzMaxXPos.z = xyzMinYPos.z = xyzMaxYPos.z = xyzMinZPos.z = xyzMaxZPos.z = z;
-                valid = true;
-            }
-        }
+        XyzCoords coords;
+        uint8 r;
+        uint8 g;
+        uint8 b;
+        uint8 ir;
+        RawDepth depth;
     };
 
     public ref class Scan : public System::IDisposable
@@ -176,7 +102,9 @@ namespace managed_pcl {
             : impl_(0)
             , width_(w)
             , height_(h)
+            , gotTarget_(false)
         {
+            targetXyz_.x = targetXyz_.y = targetXyz_.z = 0;
             init();
         }
         !Scan() {
@@ -195,26 +123,20 @@ namespace managed_pcl {
             int get() { return height_; }
         }
 
-        property XyzBox BBox
+        property bool GotTarget
         {
-            XyzBox get() { return bbox_; }
+            bool get() { return gotTarget_; }
         }
-        property XyzRcCoords TopPos
+        property XyzCoords TargetXyz
         {
-            XyzRcCoords get() { return bbox_.TopPos; }
-        }
-        property int TopPosRow
-        {
-            int get() { return bbox_.TopPos.row; }
-        }
-        property int TopPosColumn
-        {
-            int get() { return bbox_.TopPos.column; }
+            XyzCoords get() { return targetXyz_; }
         }
 
         void setCoords(cli::array<PXCMPoint3DF32, 1>^ coords);
         void computePixelQualityFromNormals(cli::array<System::Single, 1>^ result, ProcessParams params);
+        void old_computePixelQualityFromDepthClusters(cli::array<System::UInt16, 1>^ pixelDepths, System::UInt16 invalidDepthValue, cli::array<System::Single, 1>^ result, DepthClustersParams params);
         void computePixelQualityFromDepthClusters(cli::array<System::UInt16, 1>^ pixelDepths, System::UInt16 invalidDepthValue, cli::array<System::Single, 1>^ result, DepthClustersParams params);
+        void computePixelQualityFromClusters(cli::array<RgbIrDXyzPoint, 1>^ pixelPoints, System::UInt16 invalidDepthValue, cli::array<System::Single, 1>^ result, ProcessParams params);
         void saveToPcdFile(System::String^ xyzFileName, System::String^ normalsFileName, bool binary);
 
     private:
@@ -225,7 +147,9 @@ namespace managed_pcl {
         unmanaged_impl::ScanImpl* impl_;
         int width_;
         int height_;
-        XyzBox bbox_;
+
+        bool gotTarget_;
+        XyzCoords targetXyz_;
     };
 
 }

@@ -29,6 +29,11 @@ namespace raw_streams.cs
                 result.processParams.depthClustersParams.maxDepth = 1100;
                 result.processParams.depthClustersParams.minDepth = 100;
                 result.processParams.depthClustersParams.minNumOfPixelsInBestCluster =200;
+                result.processParams.colorClustersParams.colorDistanceThreshold = 20;
+                result.processParams.colorClustersParams.halfWindowSize = 2;
+                result.processParams.colorClustersParams.maxDepth = 1100;
+                result.processParams.colorClustersParams.minDepth = 100;
+                result.processParams.colorClustersParams.minNumOfPixelsInBestCluster = 100;
                 result.maxBadPixelQuality = 0.001f;
                 result.minGoodPixelQuality = 0.999f;
                 return result;

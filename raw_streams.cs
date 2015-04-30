@@ -16,21 +16,6 @@ namespace raw_streams.cs
             form = mf;
         }
 
-        public static byte[] GetRGB32Pixels(PXCMImage image, out int cwidth, out int cheight)
-        {
-            PXCMImage.ImageData cdata;
-            byte[] cpixels=null;
-            cwidth = cheight = 0;
-            if (image.AcquireAccess(PXCMImage.Access.ACCESS_READ, PXCMImage.PixelFormat.PIXEL_FORMAT_RGB32, out cdata)>=pxcmStatus.PXCM_STATUS_NO_ERROR) 
-            {
-                cwidth = (int)cdata.pitches[0] / sizeof(Int32);
-                cheight = (int)image.info.height;
-                cpixels = cdata.ToByteArray(0, (int)cdata.pitches[0] * cheight);
-                image.ReleaseAccess(cdata);
-            }
-            return cpixels;
-        }
-
         public void ShowStream()
         {
             bool sts = true;
@@ -57,6 +42,9 @@ namespace raw_streams.cs
                 {
                     Single dfps = dinfo.frameRate.max;
                     pp.EnableStream(PXCMCapture.StreamType.STREAM_TYPE_DEPTH, dinfo.imageInfo.width, dinfo.imageInfo.height, dfps);
+                    //: enable also rgb and ir streams:
+                    pp.EnableStream(PXCMCapture.StreamType.STREAM_TYPE_COLOR, dinfo.imageInfo.width, dinfo.imageInfo.height, dfps);
+                    pp.EnableStream(PXCMCapture.StreamType.STREAM_TYPE_IR, dinfo.imageInfo.width, dinfo.imageInfo.height, dfps);
                 }
 
                 /* Initialization */
@@ -85,13 +73,13 @@ namespace raw_streams.cs
                             }
 
                             //: acquire frame:
-                            if (pp.AcquireFrame(false) < pxcmStatus.PXCM_STATUS_NO_ERROR)
+                            if (pp.AcquireFrame(true) < pxcmStatus.PXCM_STATUS_NO_ERROR)
                                 break;
 
                             //: process frame:
                             GuiParams guiParams = form.GetParams();
                             PXCMCapture.Sample sample = pp.QuerySample();
-                            projection.ComputePixelQuality(sample.depth, guiParams.processParams);
+                            projection.ComputePixelQuality(sample, guiParams.processParams);
                             pp.ReleaseFrame();
 
                             byte[] bitmap_data = projection.GetPixelColors(guiParams.maxBadPixelQuality, guiParams.minGoodPixelQuality);

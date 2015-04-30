@@ -6,6 +6,7 @@
 #include <stdio.h>
 #include "ros.h"
 #include <geometry_msgs/Pose.h>
+#include <srrc_msgs/OnOff.h>
 #include <windows.h>
 
 #include "managed_ros_ser.h"
@@ -13,12 +14,20 @@
 #include <msclr\lock.h>
 
 namespace unmanaged_ros_ser {
+
+void svcOnOffCallback(const srrc_msgs::OnOff::Request & req, srrc_msgs::OnOff::Response & res) {
+    //fixme: niy
+    res.ok = true;
+}
+
+
 class PosPublisherImpl
 {
 public:
     PosPublisherImpl(std::string const& ros_master_ip)
         : ros_master_ip_(ros_master_ip)
         , nh_()
+        , onoff_server_("rs_obj_detector_onoff_srv", &svcOnOffCallback)
         , pose_msg_()
         , detected_obj_pose_pub_("detected_obj_pose", &pose_msg_)
     {
@@ -26,6 +35,7 @@ public:
         pose_msg_.orientation.x = pose_msg_.orientation.y = pose_msg_.orientation.z = 0;
         pose_msg_.orientation.w = 1;
         nh_.initNode((char*)ros_master_ip_.c_str());
+        nh_.advertiseService(onoff_server_);
         nh_.advertise(detected_obj_pose_pub_);
     }
 
@@ -44,6 +54,7 @@ public:
 private:
     std::string const ros_master_ip_;
     ros::NodeHandle nh_;
+    ros::ServiceServer<srrc_msgs::OnOff::Request, srrc_msgs::OnOff::Response> onoff_server_;
     geometry_msgs::Pose pose_msg_;
     ros::Publisher detected_obj_pose_pub_;
     bool stop_requested_;

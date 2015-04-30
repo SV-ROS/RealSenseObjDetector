@@ -46,6 +46,7 @@ namespace raw_streams.cs
 
             this.comboBoxQualityEstimator.Items.AddRange(
                 new object[] {"DepthClusters"
+                        , "ColorClusters"
                         , "Curvature"
                         , "CurvatureStability"
                         , "DepthChange"
@@ -700,8 +701,8 @@ namespace raw_streams.cs
             this.label6.Visible = isSecondNormalRequired;
             this.label7.Visible = isSecondNormalRequired;
 
-            bool isDepthClusterParamssRequired = guiParams.processParams.qualityEstimationMethod == managed_pcl.QualityEstimationMethod.DepthClusters;
-            if (isDepthClusterParamssRequired)
+            bool isDepthClusterParamsRequired = guiParams.processParams.qualityEstimationMethod == managed_pcl.QualityEstimationMethod.DepthClusters;
+            if (isDepthClusterParamsRequired)
             {
                 this.label1.Text = "";
                 this.label2.Text = "Depth Clusters deltaDepthThreshold";
@@ -709,11 +710,20 @@ namespace raw_streams.cs
                 this.textBoxMaxDepthChangeFactor1.Text = guiParams.processParams.depthClustersParams.deltaDepthThreshold.ToString();
                 this.textBoxNormalSmoothingSize1.Text = guiParams.processParams.depthClustersParams.halfWindowSize.ToString();
             }
-            this.textBoxMaxDepthChangeFactor1.Visible = isFirstNormalRequired || isDepthClusterParamssRequired;
-            this.textBoxNormalSmoothingSize1.Visible = isFirstNormalRequired || isDepthClusterParamssRequired;
-            this.label1.Visible = isFirstNormalRequired || isDepthClusterParamssRequired;
-            this.label2.Visible = isFirstNormalRequired || isDepthClusterParamssRequired;
-            this.label3.Visible = isFirstNormalRequired || isDepthClusterParamssRequired;
+            bool isColorClusterParamsRequired = guiParams.processParams.qualityEstimationMethod == managed_pcl.QualityEstimationMethod.ColorClusters;
+            if (isColorClusterParamsRequired)
+            {
+                this.label1.Text = "";
+                this.label2.Text = "Color Clusters deltaDepthThreshold";
+                this.label3.Text = "Color Clusters halfWindowSize";
+                this.textBoxMaxDepthChangeFactor1.Text = guiParams.processParams.colorClustersParams.colorDistanceThreshold.ToString();
+                this.textBoxNormalSmoothingSize1.Text = guiParams.processParams.colorClustersParams.halfWindowSize.ToString();
+            }
+            this.textBoxMaxDepthChangeFactor1.Visible = isFirstNormalRequired || isDepthClusterParamsRequired || isColorClusterParamsRequired;
+            this.textBoxNormalSmoothingSize1.Visible = isFirstNormalRequired || isDepthClusterParamsRequired || isColorClusterParamsRequired;
+            this.label1.Visible = isFirstNormalRequired || isDepthClusterParamsRequired || isColorClusterParamsRequired;
+            this.label2.Visible = isFirstNormalRequired || isDepthClusterParamsRequired || isColorClusterParamsRequired;
+            this.label3.Visible = isFirstNormalRequired || isDepthClusterParamsRequired || isColorClusterParamsRequired;
 
             this.textBoxMaxDepthChangeFactor2.Text = guiParams.processParams.normalEstimationParams2.maxDepthChangeFactor.ToString();
             this.textBoxNormalSmoothingSize2.Text = guiParams.processParams.normalEstimationParams2.normalSmoothingSize.ToString();
@@ -749,18 +759,24 @@ namespace raw_streams.cs
 
         private void textBoxMaxDepthChangeFactor_TextChanged(object sender, EventArgs e)
         {
-            bool isDepthClusterParamssRequired = guiParams.processParams.qualityEstimationMethod == managed_pcl.QualityEstimationMethod.DepthClusters;
-            if (isDepthClusterParamssRequired)
+            bool isDepthClusterParamsRequired = guiParams.processParams.qualityEstimationMethod == managed_pcl.QualityEstimationMethod.DepthClusters;
+            bool isColorClusterParamsRequired = guiParams.processParams.qualityEstimationMethod == managed_pcl.QualityEstimationMethod.ColorClusters;
+            if (isDepthClusterParamsRequired)
                 int.TryParse(textBoxMaxDepthChangeFactor1.Text, out guiParams.processParams.depthClustersParams.deltaDepthThreshold);
+            else if(isColorClusterParamsRequired)
+                int.TryParse(textBoxMaxDepthChangeFactor1.Text, out guiParams.processParams.colorClustersParams.colorDistanceThreshold);
             else
                 float.TryParse(textBoxMaxDepthChangeFactor1.Text, out guiParams.processParams.normalEstimationParams1.maxDepthChangeFactor);
         }
 
         private void textBoxNormalSmoothingSize_TextChanged(object sender, EventArgs e)
         {
-            bool isDepthClusterParamssRequired = guiParams.processParams.qualityEstimationMethod == managed_pcl.QualityEstimationMethod.DepthClusters;
-            if (isDepthClusterParamssRequired)
+            bool isDepthClusterParamsRequired = guiParams.processParams.qualityEstimationMethod == managed_pcl.QualityEstimationMethod.DepthClusters;
+            bool isColorClusterParamsRequired = guiParams.processParams.qualityEstimationMethod == managed_pcl.QualityEstimationMethod.ColorClusters;
+            if (isDepthClusterParamsRequired)
                 int.TryParse(textBoxNormalSmoothingSize1.Text, out guiParams.processParams.depthClustersParams.halfWindowSize);
+            else if(isColorClusterParamsRequired)
+                int.TryParse(textBoxNormalSmoothingSize1.Text, out guiParams.processParams.colorClustersParams.halfWindowSize);
             else
                 float.TryParse(textBoxNormalSmoothingSize1.Text, out guiParams.processParams.normalEstimationParams1.normalSmoothingSize);
         }

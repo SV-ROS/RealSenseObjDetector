@@ -14,17 +14,21 @@ namespace raw_streams.cs
         private readonly UInt16 invalid_value; /* invalid depth values */
         private managed_pcl.Scan scan;
         private PXCMPoint3DF32[] coords;
+        private managed_pcl.RgbIrDXyzPoint[] rgb_ir_d_xyz_points = null;
         private float[] pixelQuality;
         private byte[] pixelColors;
         int height = 0;
         int width = 0;
+
+        PXCMPoint3DF32[] targetXyzPos = new PXCMPoint3DF32[1];
+        PXCMPointF32[] targetRcPos = new PXCMPointF32[1];
 
         private managed_ros_ser.PosPublisher rosPublisher = new managed_ros_ser.PosPublisher();
 
         public Projection(PXCMSession session, PXCMCapture.Device device, PXCMImage.ImageInfo dinfo)
         {
             //: start ros serial node:
-            rosPublisher.start("192.168.0.10");
+//            rosPublisher.start("192.168.0.10");
 
             //: retrieve the invalid depth pixel values
             invalid_value = device.QueryDepthLowConfidenceValue();
@@ -37,6 +41,7 @@ namespace raw_streams.cs
             int numOfPixels = dinfo.width * dinfo.height;
             scan = new managed_pcl.Scan(dinfo.width, dinfo.height);
             coords = new PXCMPoint3DF32[numOfPixels];
+            rgb_ir_d_xyz_points = new managed_pcl.RgbIrDXyzPoint[numOfPixels];
             pixelQuality = new float[numOfPixels];
             pixelColors = new byte[4 * numOfPixels]; //: pixels in rgb32
         }
@@ -60,20 +65,24 @@ namespace raw_streams.cs
             }
         }
 
-        public void ComputePixelQuality(PXCMImage depth, managed_pcl.ProcessParams processParams)
+        public void ComputePixelQuality(PXCMCapture.Sample sample, managed_pcl.ProcessParams processParams)
         {
             if (processParams.qualityEstimationMethod == managed_pcl.QualityEstimationMethod.DepthChange)
             {
-                this.computePixelQualityFromDepth(depth);
+                this.computePixelQualityFromDepth(sample.depth);
             }
             else if (processParams.qualityEstimationMethod == managed_pcl.QualityEstimationMethod.DepthClusters)
             {
-                this.depthToScan(depth);
-                this.computePixelQualityFromDepthClusters(depth, processParams);
+                this.depthToScan(sample.depth);
+                this.computePixelQualityFromDepthClusters(sample.depth, processParams);
+            }
+            else if (processParams.qualityEstimationMethod == managed_pcl.QualityEstimationMethod.ColorClusters)
+            {
+                this.computePixelQualityFromClusters(sample, processParams);
             }
             else
             {
-                this.depthToScan(depth);
+                this.depthToScan(sample.depth);
                 this.computePixelQualityFromNormals(processParams);
             }
         }
@@ -131,23 +140,32 @@ namespace raw_streams.cs
                     pixelColors[4 * i + 2] = (byte)(255.0 * (1.0 - w));
                 }
             }
-            //: top point:
-            if (scan.BBox.valid)
+            //: plot target point:
+            if (scan.GotTarget)
             {
-                int halfPatchSize = 5;
-                int topRow = scan.TopPosRow;
-                int topColumn = scan.TopPosColumn;
-                int rowStart = Math.Max(0, topRow - halfPatchSize);
-                int rowEnd = Math.Min(topRow + halfPatchSize + 1, this.height);
-                int colStart = Math.Max(0, topColumn - halfPatchSize);
-                int colEnd = Math.Min(topColumn + halfPatchSize + 1, this.width);
-                for(int iRow = rowStart; iRow < rowEnd; ++iRow) {
-                    for(int iColumn = colStart; iColumn < colEnd; ++iColumn) {
-                        int index = iRow * width + iColumn;
-                        //: magenta:
-                        pixelColors[4 * index + 0] = 255;
-                        pixelColors[4 * index + 1] = 0;
-                        pixelColors[4 * index + 2] = 255;
+                this.targetXyzPos[0].x = scan.TargetXyz.x;
+                this.targetXyzPos[0].y = scan.TargetXyz.y;
+                this.targetXyzPos[0].z = scan.TargetXyz.z;
+                if (this.projection.ProjectCameraToColor(this.targetXyzPos, this.targetRcPos) == pxcmStatus.PXCM_STATUS_NO_ERROR
+                    && this.targetRcPos[0].x != -1 && this.targetRcPos[0].y != -1)
+                {
+                    int halfPatchSize = 5;
+                    int topColumn = (int)(this.targetRcPos[0].x + 0.5);
+                    int topRow = (int)(this.targetRcPos[0].y + 0.5);
+                    int rowStart = Math.Max(0, topRow - halfPatchSize);
+                    int rowEnd = Math.Min(topRow + halfPatchSize + 1, this.height);
+                    int colStart = Math.Max(0, topColumn - halfPatchSize);
+                    int colEnd = Math.Min(topColumn + halfPatchSize + 1, this.width);
+                    for (int iRow = rowStart; iRow < rowEnd; ++iRow)
+                    {
+                        for (int iColumn = colStart; iColumn < colEnd; ++iColumn)
+                        {
+                            int index = iRow * width + iColumn;
+                            //: yellow:
+                            pixelColors[4 * index + 0] = 0;
+                            pixelColors[4 * index + 1] = 255;
+                            pixelColors[4 * index + 2] = 255;
+                        }
                     }
                 }
             }
@@ -165,6 +183,118 @@ namespace raw_streams.cs
             scan.setCoords(coords);
         }
 
+        public static byte[] getRGB32Pixels(PXCMImage image)
+        {
+            PXCMImage.ImageData cdata;
+            byte[] cpixels = null;
+            int cwidth = 0;
+            int cheight = 0;
+            if (image.AcquireAccess(PXCMImage.Access.ACCESS_READ, PXCMImage.PixelFormat.PIXEL_FORMAT_RGB32, out cdata) >= pxcmStatus.PXCM_STATUS_NO_ERROR)
+            {
+                cwidth = (int)cdata.pitches[0] / sizeof(Int32);
+                cheight = (int)image.info.height;
+                cpixels = cdata.ToByteArray(0, (int)cdata.pitches[0] * cheight);
+                image.ReleaseAccess(cdata);
+            }
+            return cpixels;
+        }
+
+        private static UInt16[] getUInt16Depths(PXCMImage depthImage)
+        {
+            PXCMImage.ImageData depthImageData;
+            UInt16[] pixelDepths = null;
+            if (depthImage.AcquireAccess(PXCMImage.Access.ACCESS_READ, PXCMImage.PixelFormat.PIXEL_FORMAT_DEPTH, out depthImageData) >= pxcmStatus.PXCM_STATUS_NO_ERROR)
+            {
+                int width = (int)depthImageData.pitches[0] / sizeof(Int16);
+                int height = (int)depthImage.info.height;
+                pixelDepths = depthImageData.ToUShortArray(0, width * height);
+                depthImage.ReleaseAccess(depthImageData);
+            }
+            return pixelDepths;
+        }
+
+        private void loadRgbIrDXyzPointCoords(PXCMImage depthImage)
+        {
+            UInt16[] pixelDepths = getUInt16Depths(depthImage);
+            if (pixelDepths != null) //minDepth < maxDepth)
+            {
+                pxcmStatus sts = projection.QueryVertices(depthImage, coords);
+                scan.setCoords(coords); //fixme: remove
+                int numOfPixels = this.rgb_ir_d_xyz_points.Length;
+                for (int i = 0; i < numOfPixels; ++i)
+                {
+                    rgb_ir_d_xyz_points[i].coords.x = coords[i].x;
+                    rgb_ir_d_xyz_points[i].coords.y = coords[i].y;
+                    rgb_ir_d_xyz_points[i].coords.z = coords[i].z;
+                    rgb_ir_d_xyz_points[i].depth = pixelDepths[i];
+                }
+            }
+            else
+            {
+                int numOfPixels = this.rgb_ir_d_xyz_points.Length;
+                for (int i = 0; i < numOfPixels; ++i)
+                {
+                    rgb_ir_d_xyz_points[i].coords.x = 0;
+                    rgb_ir_d_xyz_points[i].coords.y = 0;
+                    rgb_ir_d_xyz_points[i].coords.z = 0;
+                    rgb_ir_d_xyz_points[i].depth = 0;
+                }
+            }
+        }
+
+        private void loadRgbIrDXyzPointRgb(PXCMImage colorImage)
+        {
+            byte[] rgb32Pixels = getRGB32Pixels(colorImage);
+            if (rgb32Pixels != null)
+            {
+                int numOfPixels = this.rgb_ir_d_xyz_points.Length;
+                for (int i = 0; i < numOfPixels; ++i)
+                {
+                    rgb_ir_d_xyz_points[i].r = rgb32Pixels[4 * i + 2];
+                    rgb_ir_d_xyz_points[i].g = rgb32Pixels[4 * i + 1];
+                    rgb_ir_d_xyz_points[i].b = rgb32Pixels[4 * i + 0];
+                }
+            }
+            else
+            {
+                int numOfPixels = this.rgb_ir_d_xyz_points.Length;
+                for (int i = 0; i < numOfPixels; ++i)
+                {
+                    rgb_ir_d_xyz_points[i].r = 0;
+                    rgb_ir_d_xyz_points[i].g = 0;
+                    rgb_ir_d_xyz_points[i].b = 0;
+                }
+            }
+        }
+
+        private void loadRgbIrDXyzPointIr(PXCMImage irImage)
+        {
+            byte[] rgb32Pixels = getRGB32Pixels(irImage);
+            if (rgb32Pixels != null)
+            {
+                int numOfPixels = this.rgb_ir_d_xyz_points.Length;
+                for (int i = 0; i < numOfPixels; ++i)
+                {
+                    rgb_ir_d_xyz_points[i].ir = rgb32Pixels[4 * i + 0];
+                }
+            }
+            else
+            {
+                int numOfPixels = this.rgb_ir_d_xyz_points.Length;
+                for (int i = 0; i < numOfPixels; ++i)
+                {
+                    rgb_ir_d_xyz_points[i].ir = 0;
+                }
+            }
+        }
+
+        private void loadRgbIrDXyzPoints(PXCMCapture.Sample sample)
+        {
+            this.loadRgbIrDXyzPointCoords(sample.depth);
+            this.loadRgbIrDXyzPointRgb(sample.color);
+            this.loadRgbIrDXyzPointIr(sample.ir);
+        }
+
         private void computePixelQualityFromNormals(managed_pcl.ProcessParams processParams)
         {
             scan.computePixelQualityFromNormals(pixelQuality, processParams);
@@ -172,20 +302,9 @@ namespace raw_streams.cs
 
         private void computePixelQualityFromDepth(PXCMImage depthImage)
         {
-            PXCMImage.ImageData depthImageData;
-            UInt16[] pixelDepths = null;
-            const UInt16 minDepth = 100;
-            UInt16 maxDepth = 1100;
-            if (depthImage.AcquireAccess(PXCMImage.Access.ACCESS_READ, PXCMImage.PixelFormat.PIXEL_FORMAT_DEPTH, out depthImageData) >= pxcmStatus.PXCM_STATUS_NO_ERROR)
-            {
-                int width = (int)depthImageData.pitches[0] / sizeof(Int16);
-                int height = (int)depthImage.info.height;
-                pixelDepths = depthImageData.ToUShortArray(0, width * height);
-                System.Diagnostics.Debug.Assert(pixelDepths.Length == pixelQuality.Length);
-                depthImage.ReleaseAccess(depthImageData);
-                //minDepth = pixelDepths.Min(p => (p == this.invalid_value ? ushort.MaxValue : p));
-                //maxDepth = pixelDepths.Max();
-            }
+            float maxDepth = 1200;
+            float minDepth = 100;
+            UInt16[] pixelDepths = getUInt16Depths(depthImage);
             if (pixelDepths != null) //minDepth < maxDepth)
             {
                 int numOfPixels = pixelQuality.Length;
@@ -207,27 +326,23 @@ namespace raw_streams.cs
 
         private void computePixelQualityFromDepthClusters(PXCMImage depthImage, managed_pcl.ProcessParams processParams)
         {
-            PXCMImage.ImageData depthImageData;
-            UInt16[] pixelDepths = null;
-            if (depthImage.AcquireAccess(PXCMImage.Access.ACCESS_READ, PXCMImage.PixelFormat.PIXEL_FORMAT_DEPTH, out depthImageData) >= pxcmStatus.PXCM_STATUS_NO_ERROR)
-            {
-                int width = (int)depthImageData.pitches[0] / sizeof(Int16);
-                int height = (int)depthImage.info.height;
-                pixelDepths = depthImageData.ToUShortArray(0, width * height);
-                System.Diagnostics.Debug.Assert(pixelDepths.Length == pixelQuality.Length);
-                depthImage.ReleaseAccess(depthImageData);
-                //minDepth = pixelDepths.Min(p => (p == this.invalid_value ? ushort.MaxValue : p));
-                //maxDepth = pixelDepths.Max();
-            }
+            UInt16[] pixelDepths = getUInt16Depths(depthImage);
             if (pixelDepths != null) //minDepth < maxDepth)
             {
                 scan.computePixelQualityFromDepthClusters(pixelDepths, this.invalid_value, pixelQuality, processParams.depthClustersParams);
-                managed_pcl.XyzBox bbox = scan.BBox;
-                if (rosPublisher.isStarted() && bbox.valid)
-                    rosPublisher.publishPose(bbox.TopPos.x, bbox.TopPos.y, bbox.TopPos.z);
+                if (rosPublisher.isStarted() && scan.GotTarget)
+                    rosPublisher.publishPose(scan.TargetXyz.x, scan.TargetXyz.y, scan.TargetXyz.z);
             }
             else
                 setAllNan();
+        }
+
+        private void computePixelQualityFromClusters(PXCMCapture.Sample sample, managed_pcl.ProcessParams processParams)
+        {
+            this.loadRgbIrDXyzPoints(sample);
+            scan.computePixelQualityFromClusters(this.rgb_ir_d_xyz_points, this.invalid_value, this.pixelQuality, processParams);
+            if (rosPublisher.isStarted() && scan.GotTarget)
+                rosPublisher.publishPose(scan.TargetXyz.x, scan.TargetXyz.y, scan.TargetXyz.z);
         }
 
         private void setAllNan()

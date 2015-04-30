@@ -141,6 +141,7 @@
     <ClInclude Include="..\ros_lib\added4vc10.h" />
     <ClInclude Include="..\ros_lib\ros.h" />
     <ClInclude Include="..\ros_lib\WindowsSocket.h" />
+    <ClInclude Include="DisjointSet.h" />
     <ClInclude Include="managed_pcl.h" />
     <ClInclude Include="managed_ros_ser.h" />
     <ClInclude Include="resource.h" />
