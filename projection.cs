@@ -331,7 +331,7 @@ namespace raw_streams.cs
             {
                 scan.computePixelQualityFromDepthClusters(pixelDepths, this.invalid_value, pixelQuality, processParams.depthClustersParams);
                 if (rosPublisher.isStarted() && scan.GotTarget)
-                    rosPublisher.publishPose(scan.TargetXyz.x, scan.TargetXyz.y, scan.TargetXyz.z);
+                    rosPublisher.publishPose(scan.TargetXyz.x / 1000.0, scan.TargetXyz.y / 1000.0, scan.TargetXyz.z / 1000.0);
             }
             else
                 setAllNan();

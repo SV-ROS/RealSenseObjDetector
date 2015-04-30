@@ -442,7 +442,24 @@ namespace clustering {
 
 
     typedef uint16_t RawZ;
-    typedef Range<RawZ> ZRange;
+
+    struct ZRange
+    {
+        typedef RawZ Value;
+        Value min;
+        Value max;
+
+        void init(Value v, ...) {
+            min = max = v;
+        }
+        void add(ZRange const& other) {
+            if(min == 0 || (min > other.min && other.min != 0)) //fixme: use invalid value?
+                min = other.min;
+            if(max < other.max)
+                max = other.max;
+        }
+    };
+
     typedef ValueTraits<RawZ> ZTraits;
     typedef XyRules<ZTraits> DepthViewRules;
     typedef DisjointSet<ZRange, DepthViewRules> ZRangeDisjointSet;
@@ -544,11 +561,6 @@ namespace clustering {
                 min.z = other.min.z;
             if(max.z < other.max.z)
                 max.z = other.max.z;
-
-            //if(minDepth == 0 || (minDepth > other.minDepth && other.minDepth != 0)) //fixme: use invalid value?
-            //    minDepth = other.minDepth;
-            //if(maxDepth < other.maxDepth)
-            //    maxDepth = other.maxDepth;
         }
     };
 

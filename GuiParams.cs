@@ -16,7 +16,7 @@ namespace raw_streams.cs
             get
             {
                 GuiParams result = new GuiParams();
-                result.processParams.qualityEstimationMethod = managed_pcl.QualityEstimationMethod.DepthClusters;
+                result.processParams.qualityEstimationMethod = managed_pcl.QualityEstimationMethod.ColorClusters;
                 result.processParams.normalEstimationParams1.normalEstimatorMethod = managed_pcl.NormalEstimationMethod.COVARIANCE_MATRIX;
                 result.processParams.normalEstimationParams1.maxDepthChangeFactor = 0.001f;
                 result.processParams.normalEstimationParams1.normalSmoothingSize = 6.0f;
