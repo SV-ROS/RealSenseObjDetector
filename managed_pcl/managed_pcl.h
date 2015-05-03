@@ -103,6 +103,7 @@ namespace managed_pcl {
             , width_(w)
             , height_(h)
             , gotTarget_(false)
+            , gotObjectCenterInPixels_(false)
         {
             targetXyz_.x = targetXyz_.y = targetXyz_.z = 0;
             init();
@@ -132,6 +133,15 @@ namespace managed_pcl {
             XyzCoords get() { return targetXyz_; }
         }
 
+        property bool GotObjectCenterInPixels
+        {
+            bool get() { return gotObjectCenterInPixels_; }
+        }
+        property RcCoords ObjectCenterInPixels
+        {
+            RcCoords get() { return objectCenterInPixels_; }
+        }
+
         void setCoords(cli::array<PXCMPoint3DF32, 1>^ coords);
         void computePixelQualityFromNormals(cli::array<System::Single, 1>^ result, ProcessParams params);
         void old_computePixelQualityFromDepthClusters(cli::array<System::UInt16, 1>^ pixelDepths, System::UInt16 invalidDepthValue, cli::array<System::Single, 1>^ result, DepthClustersParams params);
@@ -150,6 +160,9 @@ namespace managed_pcl {
 
         bool gotTarget_;
         XyzCoords targetXyz_;
+
+        bool gotObjectCenterInPixels_;
+        RcCoords objectCenterInPixels_;
     };
 
 }

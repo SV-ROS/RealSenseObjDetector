@@ -50,6 +50,9 @@ namespace clustering {
         {
         }
 
+        t_Rules const& getRules() const { return rules_; }
+        t_Rules& getMutableRules() const { return rules_; }
+
         template<typename t_PointsPtr>
         void setData(t_PointsPtr points, int numOfPoints) {
             initCusters(points, numOfPoints);
@@ -411,6 +414,12 @@ namespace clustering {
         {
         }
 
+        int getHalfWindowSize() const { return halfWindowSize_; }
+        void setHalfWindowSize(int halfWindowSize) { halfWindowSize_ = halfWindowSize_; }
+
+        t_ValueTraits const& getValueTraits() const { return valueTraits_; }
+        t_ValueTraits& getMutableValueTraits() { return valueTraits_; }
+
         NeighborIndicesEnumerator getNeighborIndicesEnumerator(ClusterIndex clusterIndex) const {
             return NeighborIndicesEnumerator(XyNeighborhood(frame_, halfWindowSize_, clusterIndex));
         }
@@ -489,6 +498,20 @@ namespace clustering {
     struct PixelXyRange
     {
         PixelXy min, max;
+
+        PixelXy getTargetPoint() const {
+            PixelXy res = { (min.column + max.column) / 2, (min.row + max.row) / 2 };
+            return res;
+        }
+        int getWidth() const {
+            return max.column - min.column;
+        }
+        int getHeight() const {
+            return max.row - min.row;
+        }
+        int getMaxSize() const {
+            return std::max(getHeight(), getWidth());
+        }
 
         template<typename t_Point>
         void init(t_Point const& v, XyFrame const& frame, int pointIndex) {
@@ -593,45 +616,18 @@ namespace clustering {
 
         template<typename t_Point>
         bool areClose(t_Point const& p1, t_Point const& p2) const {
-            float d = std::sqrt(sqRgbDistanceApprox(p1, p2));
+            double d = std::sqrt(sqRgbDistanceApprox(p1, p2));
             return d < distanceThreshold;
         }
 
         template<typename t_Point1, typename t_Point2>
-        static float sqRgbDistanceApprox(t_Point1 const& p1, t_Point2 const& p2) {
+        static double sqRgbDistanceApprox(t_Point1 const& p1, t_Point2 const& p2) {
             ///: grabbed from http://www.compuphase.com/cmetric.htm
           long rmean = ( (long)p1.r + (long)p2.r ) / 2;
           long r = (long)p1.r - (long)p2.r;
           long g = (long)p1.g - (long)p2.g;
           long b = (long)p1.b - (long)p2.b;
-          return (((512+rmean)*r*r)>>8) + 4*g*g + (((767-rmean)*b*b)>>8);
-        }
-
-        template<typename t_Point1, typename t_Point2>
-        static float sqRgbDistanceNaive(t_Point1 const& p1, t_Point2 const& p2) {
-            float dr = p1.r;
-            dr -= p2.r;
-            float dg = p1.g;
-            dg -= p2.g;
-            float db = p1.b;
-            db -= p2.b;
-            return dr * dr + dg * dg + db * db;
-        }
-
-        template<typename t_Point1, typename t_Point2>
-        static float sqSinRgbDistance(t_Point1 const& p1, t_Point2 const& p2) {
-            float r1 = p1.r;
-            float r2 = p2.r;
-            float g1 = p1.g;
-            float g2 = p2.g;
-            float b1 = p1.b;
-            float b2 = p2.b;
-            float d1 = r1*r1 + g1*g1 + b1*b1;
-            float d2 = r2*r2 + g2*g2 + b2*b2;
-            float dot = r1*r2 + g1*g2 + b1*b2;
-            static const float minSqNorm = 40*40;
-            float sqcos = (d1 > minSqNorm && d2 > minSqNorm) ? dot * dot / (d1*d2) : 0;
-            return 10000 * (1 - sqcos);
+          return (double)(((512+rmean)*r*r)>>8) + 4*g*g + (((767-rmean)*b*b)>>8);
         }
 
         template<typename t_Point>
@@ -650,7 +646,7 @@ namespace clustering {
 
         template<typename t_Point>
         static float distanceToWhite(t_Point const& p) {
-            return std::sqrt(sqRgbDistanceApprox(p, RgbCoords::getWhite()));
+            return (float)std::sqrt(sqRgbDistanceApprox(p, RgbCoords::getWhite()));
         }
 
     };
@@ -726,7 +722,8 @@ namespace clustering {
         RgbIrDXyzClusterComparer(int aMinNumOfPoints) : minNumOfPoints(aMinNumOfPoints) {}
 
         bool isOk(ClusterIndex clusterIndex, RgbIrDXyzDisjointSet const& clusters) const {
-            return clusters.getTopClusterNumOfPoints(clusterIndex) >= minNumOfPoints;
+            return clusters.getTopClusterNumOfPoints(clusterIndex) >= minNumOfPoints
+                && clusters.getTopCluster(clusterIndex).pixelXy.getMaxSize() < 200; //fixme: move to params
         }
         bool isBetter(ClusterIndex clusterIndex1, ClusterIndex clusterIndex2, RgbIrDXyzDisjointSet const& clusters) const {
             float distanceToWhite1 = clusters.getTopCluster(clusterIndex1).distanceToWhite();

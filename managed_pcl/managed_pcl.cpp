@@ -586,6 +586,14 @@ void Scan::computePixelQualityFromClusters(cli::array<RgbIrDXyzPoint, 1>^ pixelP
             }
         }
     }
+
+    gotObjectCenterInPixels_ = (bestCluster != 0);
+    if(gotObjectCenterInPixels_) {
+        clustering::PixelXy p = bestCluster->pixelXy.getTargetPoint();
+        objectCenterInPixels_.column = p.column;
+        objectCenterInPixels_.row = p.row;
+    }
+
     gotTarget_ = (bestCluster != 0 && bestCluster->xyz.isValid());
     if(gotTarget_) {
         clustering::XyzCoords p = bestCluster->xyz.getTargetPoint();

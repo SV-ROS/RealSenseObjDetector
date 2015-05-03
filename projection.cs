@@ -20,15 +20,20 @@ namespace raw_streams.cs
         int height = 0;
         int width = 0;
 
+        //: the following arays are made fields to avoid frequent allocation/dealocation of them:
         PXCMPoint3DF32[] targetXyzPos = new PXCMPoint3DF32[1];
+        PXCMPoint3DF32[] targetIjzPos = new PXCMPoint3DF32[1];
         PXCMPointF32[] targetRcPos = new PXCMPointF32[1];
+        bool gotTargetPos = false;
+        bool gotTargetDir = false;
+        bool gotTargetRcPos = false;
 
         private managed_ros_ser.PosPublisher rosPublisher = new managed_ros_ser.PosPublisher();
 
         public Projection(PXCMSession session, PXCMCapture.Device device, PXCMImage.ImageInfo dinfo)
         {
             //: start ros serial node:
-//            rosPublisher.start("192.168.0.10");
+            rosPublisher.start("192.168.0.10");
 
             //: retrieve the invalid depth pixel values
             invalid_value = device.QueryDepthLowConfidenceValue();
@@ -140,31 +145,42 @@ namespace raw_streams.cs
                     pixelColors[4 * i + 2] = (byte)(255.0 * (1.0 - w));
                 }
             }
-            //: plot target point:
-            if (scan.GotTarget)
+
+            if (this.gotTargetRcPos)
             {
-                this.targetXyzPos[0].x = scan.TargetXyz.x;
-                this.targetXyzPos[0].y = scan.TargetXyz.y;
-                this.targetXyzPos[0].z = scan.TargetXyz.z;
-                if (this.projection.ProjectCameraToColor(this.targetXyzPos, this.targetRcPos) == pxcmStatus.PXCM_STATUS_NO_ERROR
-                    && this.targetRcPos[0].x != -1 && this.targetRcPos[0].y != -1)
+                //: plot target point:
+                int halfPatchSize = 5;
+                int topColumn = (int)(this.targetRcPos[0].x + 0.5);
+                int topRow = (int)(this.targetRcPos[0].y + 0.5);
+                int rowStart = Math.Max(0, topRow - halfPatchSize);
+                int rowEnd = Math.Min(topRow + halfPatchSize + 1, this.height);
+                int colStart = Math.Max(0, topColumn - halfPatchSize);
+                int colEnd = Math.Min(topColumn + halfPatchSize + 1, this.width);
+                for (int iRow = rowStart; iRow < rowEnd; ++iRow)
                 {
-                    int halfPatchSize = 5;
-                    int topColumn = (int)(this.targetRcPos[0].x + 0.5);
-                    int topRow = (int)(this.targetRcPos[0].y + 0.5);
-                    int rowStart = Math.Max(0, topRow - halfPatchSize);
-                    int rowEnd = Math.Min(topRow + halfPatchSize + 1, this.height);
-                    int colStart = Math.Max(0, topColumn - halfPatchSize);
-                    int colEnd = Math.Min(topColumn + halfPatchSize + 1, this.width);
-                    for (int iRow = rowStart; iRow < rowEnd; ++iRow)
+                    for (int iColumn = colStart; iColumn < colEnd; ++iColumn)
                     {
-                        for (int iColumn = colStart; iColumn < colEnd; ++iColumn)
+                        int index = iRow * width + iColumn;
+                        if (this.gotTargetPos)
                         {
-                            int index = iRow * width + iColumn;
                             //: yellow:
                             pixelColors[4 * index + 0] = 0;
                             pixelColors[4 * index + 1] = 255;
                             pixelColors[4 * index + 2] = 255;
+                        }
+                        else if (this.gotTargetDir)
+                        {
+                            //: orange:
+                            pixelColors[4 * index + 0] = 0;
+                            pixelColors[4 * index + 1] = 128;
+                            pixelColors[4 * index + 2] = 255;
+                        }
+                        else
+                        {
+                            //: brown:
+                            pixelColors[4 * index + 0] = 0;
+                            pixelColors[4 * index + 1] = 128;
+                            pixelColors[4 * index + 2] = 128;
                         }
                     }
                 }
@@ -175,6 +191,37 @@ namespace raw_streams.cs
         public void SaveToPcd(string xyzFileName, string normalsFileName, bool binary)
         {
             scan.saveToPcdFile(xyzFileName, normalsFileName, binary);
+        }
+
+        private void updateTargetPos()
+        {
+            this.gotTargetRcPos = false;
+            this.gotTargetDir = this.gotTargetPos = scan.GotTarget;
+            if(this.gotTargetPos)
+            {
+                this.targetXyzPos[0].x = scan.TargetXyz.x;
+                this.targetXyzPos[0].y = scan.TargetXyz.y;
+                this.targetXyzPos[0].z = scan.TargetXyz.z;
+                this.gotTargetRcPos = (this.projection.ProjectCameraToColor(this.targetXyzPos, this.targetRcPos) == pxcmStatus.PXCM_STATUS_NO_ERROR
+                    && this.targetRcPos[0].x != -1 && this.targetRcPos[0].y != -1);
+            }
+            else if (scan.GotObjectCenterInPixels)
+            {
+                this.gotTargetRcPos = true;
+                this.targetRcPos[0].x = scan.ObjectCenterInPixels.column;
+                this.targetRcPos[0].y = scan.ObjectCenterInPixels.row;
+                //: instead of pos get the direction to target from object pixels:
+                this.targetIjzPos[0].x = scan.ObjectCenterInPixels.column;
+                this.targetIjzPos[0].y = scan.ObjectCenterInPixels.row;
+                this.targetIjzPos[0].z = 1000;
+                this.gotTargetDir = (this.projection.ProjectColorToCamera(this.targetIjzPos, this.targetXyzPos) == pxcmStatus.PXCM_STATUS_NO_ERROR);
+            }
+        }
+
+        private void publishTargetPosOrDir()
+        {
+            if (rosPublisher.isStarted() && this.gotTargetDir)
+                rosPublisher.publishPose(this.targetXyzPos[0].x / 1000.0, this.targetXyzPos[0].y / 1000.0, this.targetXyzPos[0].z / 1000.0);
         }
 
         private void depthToScan(PXCMImage depth)
@@ -330,8 +377,8 @@ namespace raw_streams.cs
             if (pixelDepths != null) //minDepth < maxDepth)
             {
                 scan.computePixelQualityFromDepthClusters(pixelDepths, this.invalid_value, pixelQuality, processParams.depthClustersParams);
-                if (rosPublisher.isStarted() && scan.GotTarget)
-                    rosPublisher.publishPose(scan.TargetXyz.x / 1000.0, scan.TargetXyz.y / 1000.0, scan.TargetXyz.z / 1000.0);
+                this.updateTargetPos();
+                this.publishTargetPosOrDir();
             }
             else
                 setAllNan();
@@ -341,8 +388,8 @@ namespace raw_streams.cs
         {
             this.loadRgbIrDXyzPoints(sample);
             scan.computePixelQualityFromClusters(this.rgb_ir_d_xyz_points, this.invalid_value, this.pixelQuality, processParams);
-            if (rosPublisher.isStarted() && scan.GotTarget)
-                rosPublisher.publishPose(scan.TargetXyz.x, scan.TargetXyz.y, scan.TargetXyz.z);
+            this.updateTargetPos();
+            this.publishTargetPosOrDir();
         }
 
         private void setAllNan()
