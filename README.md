@@ -11,4 +11,3 @@ Software requirements:
 - Microsoft .NET 4.0 Framework for C# development
 - MSVC 2010 or greater (tested with MSVC 2010)
 - Intel RealSense SDK
-- PCL (tested with version 1.7.1)
