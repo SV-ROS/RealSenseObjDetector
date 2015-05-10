@@ -11,11 +11,11 @@ using namespace System::Security::Permissions;
 // set of attributes. Change these attribute values to modify the information
 // associated with an assembly.
 //
-[assembly:AssemblyTitleAttribute("managed_pcl")];
+[assembly:AssemblyTitleAttribute("managed_obj_detector")];
 [assembly:AssemblyDescriptionAttribute("")];
 [assembly:AssemblyConfigurationAttribute("")];
 [assembly:AssemblyCompanyAttribute("")];
-[assembly:AssemblyProductAttribute("managed_pcl")];
+[assembly:AssemblyProductAttribute("managed_obj_detector")];
 [assembly:AssemblyCopyrightAttribute("Copyright (c)  2015")];
 [assembly:AssemblyTrademarkAttribute("")];
 [assembly:AssemblyCultureAttribute("")];

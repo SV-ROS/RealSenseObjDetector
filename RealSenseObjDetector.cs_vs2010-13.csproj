@@ -169,7 +169,7 @@
   <ItemGroup>
     <ProjectReference Include="managed_pcl\managed_pcl.vcxproj">
       <Project>{293687C7-8A1F-40E5-A3A6-EE2FABD39459}</Project>
-      <Name>managed_pcl</Name>
+      <Name>managed_obj_detector</Name>
     </ProjectReference>
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />

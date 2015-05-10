@@ -1,4 +1,4 @@
-// managed_pcl.h
+// managed_obj_detector.h
 
 #pragma once
 #include <vcclr.h>
@@ -6,32 +6,23 @@
 using namespace System;
 
 namespace unmanaged_impl {
-    struct ScanImpl;
+    struct ObjDetectorImpl;
 }
 
-namespace managed_pcl {
+namespace managed_obj_detector {
 
     public enum class QualityEstimationMethod
     {
-      DepthClusters,
-      ColorClusters,
-      Curvature,
-      CurvatureStability,
-      DepthChange
+      ColorClusters
     };
 
-    public enum class NormalEstimationMethod
+    public enum class PixelColoringMethodEnum
     {
-      COVARIANCE_MATRIX,
-      AVERAGE_3D_GRADIENT,
-      AVERAGE_DEPTH_CHANGE
-    };
-
-    public value struct NormalEstimationParams
-    {
-        NormalEstimationMethod normalEstimatorMethod;
-        float maxDepthChangeFactor;
-        float normalSmoothingSize;
+        None,
+        ByScore,
+        ByClusterMeanColor,
+        ByClusterMaxColor,
+        ByClusterDepth
     };
 
     public enum class PixelQualitySpecialValue
@@ -41,16 +32,6 @@ namespace managed_pcl {
       SmallCluster = -4,
     };
 
-    public value struct DepthClustersParams
-    {
-        int halfWindowSize;
-        int deltaDepthThreshold;
-        bool ignoreInvalidDepth;
-        int minDepth;
-        int maxDepth;
-        int minNumOfPixelsInBestCluster;
-    };
-
     public value struct ColorClustersParams
     {
         int halfWindowSize;
@@ -58,15 +39,15 @@ namespace managed_pcl {
         int minDepth;
         int maxDepth;
         int minNumOfPixelsInBestCluster;
+        PixelColoringMethodEnum pixelColoringMethod;
     };
 
     public value struct ProcessParams
     {
         QualityEstimationMethod qualityEstimationMethod;
-        NormalEstimationParams normalEstimationParams1;
-        NormalEstimationParams normalEstimationParams2;
-        DepthClustersParams depthClustersParams;
         ColorClustersParams colorClustersParams;
+        float maxBadPixelQuality;
+        float minGoodPixelQuality;
     };
 
     public value struct XyzCoords
@@ -95,33 +76,42 @@ namespace managed_pcl {
         RawDepth depth;
     };
 
-    public ref class Scan : public System::IDisposable
+    public ref class ObjDetector : public System::IDisposable
     {
     public:
-        Scan(int w, int h)
+        ObjDetector(int w, int h, RawDepth invalidDepthValue)
             : impl_(0)
             , width_(w)
             , height_(h)
+            , numOfPixels_(w * h)
+            , invalidDepthValue_(invalidDepthValue)
             , gotTarget_(false)
             , gotObjectCenterInPixels_(false)
         {
             targetXyz_.x = targetXyz_.y = targetXyz_.z = 0;
+            pixelQuality_ = gcnew cli::array<System::Single, 1>(numOfPixels_);
+            pixelColors_ = gcnew cli::array<uint8, 1>(4 * numOfPixels_); //: pixels in rgb32
             init();
         }
-        !Scan() {
+        !ObjDetector() {
             clean();
         }
-        ~Scan() {
-            this->!Scan();
+        ~ObjDetector() {
+            this->!ObjDetector();
         }
 
-        property int Width
-        {
+        property int Width {
             int get() { return width_; }
         }
-        property int Height
-        {
+        property int Height {
             int get() { return height_; }
+        }
+        property int NumOfPixels {
+            int get() { return numOfPixels_; }
+        }
+
+        property cli::array<uint8, 1>^ PixelColors {
+            cli::array<uint8, 1>^ get() { return pixelColors_; }
         }
 
         property bool GotTarget
@@ -142,21 +132,27 @@ namespace managed_pcl {
             RcCoords get() { return objectCenterInPixels_; }
         }
 
-        void setCoords(cli::array<PXCMPoint3DF32, 1>^ coords);
-        void computePixelQualityFromNormals(cli::array<System::Single, 1>^ result, ProcessParams params);
-        void old_computePixelQualityFromDepthClusters(cli::array<System::UInt16, 1>^ pixelDepths, System::UInt16 invalidDepthValue, cli::array<System::Single, 1>^ result, DepthClustersParams params);
-        void computePixelQualityFromDepthClusters(cli::array<System::UInt16, 1>^ pixelDepths, System::UInt16 invalidDepthValue, cli::array<System::Single, 1>^ result, DepthClustersParams params);
-        void computePixelQualityFromClusters(cli::array<RgbIrDXyzPoint, 1>^ pixelPoints, System::UInt16 invalidDepthValue, cli::array<System::Single, 1>^ result, ProcessParams params);
-        void saveToPcdFile(System::String^ xyzFileName, System::String^ normalsFileName, bool binary);
+        void clusterize(cli::array<RgbIrDXyzPoint, 1>^ pixelPoints, ProcessParams params);
 
     private:
         void init();
         void clean();
 
+        void colorPixels(ProcessParams params);
+        void colorPixelsByScore(float maxBad, float minGood);
+        void colorPixelsByClusterColor(PixelColoringMethodEnum aPixelColoringMethod);
+        void colorPixelsByClusterDepth(float minDepth, float maxDepth);
+        void setupTarget();
+
     private:
-        unmanaged_impl::ScanImpl* impl_;
+        unmanaged_impl::ObjDetectorImpl* impl_;
         int width_;
         int height_;
+        int numOfPixels_;
+        RawDepth invalidDepthValue_;
+
+        cli::array<System::Single, 1>^ pixelQuality_;
+        cli::array<uint8, 1>^ pixelColors_;
 
         bool gotTarget_;
         XyzCoords targetXyz_;

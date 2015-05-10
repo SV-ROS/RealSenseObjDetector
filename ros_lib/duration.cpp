@@ -1,3 +1,4 @@
+#pragma warning(disable : 4244) // conversion from 'double' to 'long', possible loss of data
 //#pragma managed(push, off)
 /* 
  * Software License Agreement (BSD License)

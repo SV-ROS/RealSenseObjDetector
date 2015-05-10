@@ -28,8 +28,6 @@ namespace raw_streams.cs
                     form.UpdateStatus("Failed to create an SDK pipeline object");
                     return;
                 }
-                if (!form.IsModeLive())
-                    pp.captureManager.SetFileName(form.GetFileName(), form.IsModeRecorded());
 
                 /* Set Input Source */
                 PXCMCapture.DeviceInfo dinfo2 = form.GetCheckedDevice();
@@ -79,18 +77,12 @@ namespace raw_streams.cs
                             //: process frame:
                             GuiParams guiParams = form.GetParams();
                             PXCMCapture.Sample sample = pp.QuerySample();
-                            projection.ComputePixelQuality(sample, guiParams.processParams);
+                            projection.SearchForObject(sample, guiParams.processParams);
                             pp.ReleaseFrame();
 
-                            byte[] bitmap_data = projection.GetPixelColors(guiParams.maxBadPixelQuality, guiParams.minGoodPixelQuality);
+                            byte[] bitmap_data = projection.GetPixelColors();
                             form.SetPicture(bitmap_width, bitmap_height, bitmap_data);
                             form.UpdatePicture();
-
-                            if (form.IsSaveToPcdRequested())
-                            {
-                                projection.SaveToPcd(form.getXyzPcdFileName(), form.getNormalsPcdFileName(), form.IsSaveToPcdBinary());
-                                form.OnSaveToPcdCompleted();
-                            }
                             timer.Tick("Streaming.");
                         }
                     }

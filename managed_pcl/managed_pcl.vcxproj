@@ -23,6 +23,7 @@
     <TargetFrameworkVersion>v4.0</TargetFrameworkVersion>
     <Keyword>ManagedCProj</Keyword>
     <RootNamespace>managed_pcl</RootNamespace>
+    <ProjectName>managed_obj_detector</ProjectName>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="Configuration">
@@ -100,8 +101,9 @@
     </ClCompile>
     <Link>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalDependencies>pcl_io_debug.lib;pcl_common_debug.lib;pcl_features_debug.lib;pcl_search_debug.lib</AdditionalDependencies>
-      <AdditionalLibraryDirectories>$(PCL_DIR)-debug\lib;$(BOOST_ROOT)\lib64;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalDependencies>
+      </AdditionalDependencies>
+      <AdditionalLibraryDirectories>$(BOOST_ROOT)\lib64;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
@@ -125,14 +127,12 @@
     </ClCompile>
     <Link>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalDependencies>pcl_io_release.lib;pcl_common_release.lib;pcl_features_release.lib;pcl_search_release.lib</AdditionalDependencies>
-      <AdditionalLibraryDirectories>$(PCL_DIR)\lib;$(BOOST_ROOT)\lib64;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalDependencies>
+      </AdditionalDependencies>
+      <AdditionalLibraryDirectories>$(BOOST_ROOT)\lib64;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <Reference Include="libpxcclr.cs, Version=1.0.0.0, Culture=neutral, PublicKeyToken=ca106b2214526f83">
-      <HintPath>..\..\..\..\..\Program Files (x86)\Intel\RSSDK\bin\x64\libpxcclr.cs.dll</HintPath>
-    </Reference>
     <Reference Include="System" />
     <Reference Include="System.Data" />
     <Reference Include="System.Xml" />
@@ -142,7 +142,7 @@
     <ClInclude Include="..\ros_lib\ros.h" />
     <ClInclude Include="..\ros_lib\WindowsSocket.h" />
     <ClInclude Include="DisjointSet.h" />
-    <ClInclude Include="managed_pcl.h" />
+    <ClInclude Include="managed_obj_detector.h" />
     <ClInclude Include="managed_ros_ser.h" />
     <ClInclude Include="resource.h" />
     <ClInclude Include="Stdafx.h" />
@@ -153,7 +153,7 @@
     <ClCompile Include="..\ros_lib\time.cpp" />
     <ClCompile Include="..\ros_lib\WindowsSocket.cpp" />
     <ClCompile Include="AssemblyInfo.cpp" />
-    <ClCompile Include="managed_pcl.cpp" />
+    <ClCompile Include="managed_obj_detector.cpp" />
     <ClCompile Include="managed_ros_ser.cpp" />
     <ClCompile Include="Stdafx.cpp">
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Create</PrecompiledHeader>

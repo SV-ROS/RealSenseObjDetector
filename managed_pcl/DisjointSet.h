@@ -51,7 +51,7 @@ namespace clustering {
         }
 
         t_Rules const& getRules() const { return rules_; }
-        t_Rules& getMutableRules() const { return rules_; }
+        t_Rules& getMutableRules() { return rules_; }
 
         template<typename t_PointsPtr>
         void setData(t_PointsPtr points, int numOfPoints) {
@@ -415,7 +415,7 @@ namespace clustering {
         }
 
         int getHalfWindowSize() const { return halfWindowSize_; }
-        void setHalfWindowSize(int halfWindowSize) { halfWindowSize_ = halfWindowSize_; }
+        void setHalfWindowSize(int halfWindowSize) { halfWindowSize_ = halfWindowSize; }
 
         t_ValueTraits const& getValueTraits() const { return valueTraits_; }
         t_ValueTraits& getMutableValueTraits() { return valueTraits_; }
@@ -597,6 +597,39 @@ namespace clustering {
             static RgbCoords res = {255, 255, 255};
             return res;
         }
+
+        int sum() const {
+            return (int)r + (int)g + (int)b;
+        }
+
+        double dotWhite() const {
+            double res = 255 * r + 255 * g + 255 * b;
+            res /= std::sqrt((((double)r) * r + ((double)g) * g + ((double)b) * b) * 3) * 255;
+            return res;
+        }
+
+        bool isBlack() const {
+            return sum() < 72;
+        }
+    };
+
+    struct RgbCoordsF64
+    {
+        double r;
+        double g;
+        double b;
+
+        RgbCoordsF64& operator+=(RgbCoordsF64 const& other) {
+            r += other.r;
+            g += other.g;
+            b += other.b;
+            return *this;
+        }
+        void set(RgbCoords const& other) {
+            r = other.r;
+            g = other.g;
+            b = other.b;
+        }
     };
 
 
@@ -645,8 +678,8 @@ namespace clustering {
         }
 
         template<typename t_Point>
-        static float distanceToWhite(t_Point const& p) {
-            return (float)std::sqrt(sqRgbDistanceApprox(p, RgbCoords::getWhite()));
+        static double distanceToWhite(t_Point const& p) {
+            return std::sqrt(sqRgbDistanceApprox(p, RgbCoords::getWhite()));
         }
 
     };
@@ -690,6 +723,8 @@ namespace clustering {
         RgbRange rgb;
         XyzRange xyz;
 
+        RgbCoords rgb_sample;
+
         template<typename t_Point>
         void init(t_Point const& v, XyFrame const& frame, int pointIndex) {
             depth.init(v.depth, frame, pointIndex);
@@ -697,6 +732,10 @@ namespace clustering {
             pixelXy.init(v, frame, pointIndex);
             rgb.init(v, frame, pointIndex);
             xyz.init(v, frame, pointIndex);
+
+            rgb_sample.r = v.r;
+            rgb_sample.g = v.g;
+            rgb_sample.b = v.b;
         }
         void add(RgbIrDXyzPointRange const& other) {
             depth.add(other.depth);
@@ -704,9 +743,13 @@ namespace clustering {
             pixelXy.add(other.pixelXy);
             rgb.add(other.rgb);
             xyz.add(other.xyz);
+
+            if(!other.rgb_sample.isBlack() && rgb_sample.dotWhite() > other.rgb_sample.dotWhite()
+                || rgb_sample.isBlack() && rgb_sample.sum() < other.rgb_sample.sum())
+                rgb_sample = other.rgb_sample;
         }
 
-        float distanceToWhite() const {
+        double distanceToWhite() const {
             return RgbTraits::distanceToWhite(rgb.max);
         }
 
@@ -726,8 +769,8 @@ namespace clustering {
                 && clusters.getTopCluster(clusterIndex).pixelXy.getMaxSize() < 200; //fixme: move to params
         }
         bool isBetter(ClusterIndex clusterIndex1, ClusterIndex clusterIndex2, RgbIrDXyzDisjointSet const& clusters) const {
-            float distanceToWhite1 = clusters.getTopCluster(clusterIndex1).distanceToWhite();
-            float distanceToWhite2 = clusters.getTopCluster(clusterIndex2).distanceToWhite();
+            double distanceToWhite1 = clusters.getTopCluster(clusterIndex1).distanceToWhite();
+            double distanceToWhite2 = clusters.getTopCluster(clusterIndex2).distanceToWhite();
             return distanceToWhite1 < distanceToWhite2;
         }
     };

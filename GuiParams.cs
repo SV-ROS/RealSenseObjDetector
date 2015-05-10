@@ -7,35 +7,29 @@ namespace raw_streams.cs
 {
     internal struct GuiParams
     {
-        public managed_pcl.ProcessParams processParams;
-        public float maxBadPixelQuality;
-        public float minGoodPixelQuality;
+        public managed_obj_detector.ProcessParams processParams;
 
         public static GuiParams Default
         {
             get
             {
                 GuiParams result = new GuiParams();
-                result.processParams.qualityEstimationMethod = managed_pcl.QualityEstimationMethod.ColorClusters;
-                result.processParams.normalEstimationParams1.normalEstimatorMethod = managed_pcl.NormalEstimationMethod.COVARIANCE_MATRIX;
-                result.processParams.normalEstimationParams1.maxDepthChangeFactor = 0.001f;
-                result.processParams.normalEstimationParams1.normalSmoothingSize = 6.0f;
-                result.processParams.normalEstimationParams2.normalEstimatorMethod = managed_pcl.NormalEstimationMethod.COVARIANCE_MATRIX;
-                result.processParams.normalEstimationParams2.maxDepthChangeFactor = 0.001f;
-                result.processParams.normalEstimationParams2.normalSmoothingSize = 60.0f;
-                result.processParams.depthClustersParams.deltaDepthThreshold = 10;
-                result.processParams.depthClustersParams.halfWindowSize = 5;
-                result.processParams.depthClustersParams.ignoreInvalidDepth = false;
-                result.processParams.depthClustersParams.maxDepth = 1100;
-                result.processParams.depthClustersParams.minDepth = 100;
-                result.processParams.depthClustersParams.minNumOfPixelsInBestCluster =200;
+                result.processParams.qualityEstimationMethod = managed_obj_detector.QualityEstimationMethod.ColorClusters;
+                //result.processParams.depthClustersParams.deltaDepthThreshold = 10;
+                //result.processParams.depthClustersParams.halfWindowSize = 5;
+                //result.processParams.depthClustersParams.ignoreInvalidDepth = false;
+                //result.processParams.depthClustersParams.maxDepth = 1100;
+                //result.processParams.depthClustersParams.minDepth = 100;
+                //result.processParams.depthClustersParams.minNumOfPixelsInBestCluster = 200;
+                //result.processParams.depthClustersParams.pixelColoringMethod = managed_obj_detector.PixelColoringMethodEnum.ByScore;
                 result.processParams.colorClustersParams.colorDistanceThreshold = 20;
                 result.processParams.colorClustersParams.halfWindowSize = 2;
                 result.processParams.colorClustersParams.maxDepth = 1100;
                 result.processParams.colorClustersParams.minDepth = 100;
                 result.processParams.colorClustersParams.minNumOfPixelsInBestCluster = 100;
-                result.maxBadPixelQuality = 0.001f;
-                result.minGoodPixelQuality = 0.999f;
+                result.processParams.colorClustersParams.pixelColoringMethod = managed_obj_detector.PixelColoringMethodEnum.ByClusterMeanColor;
+                result.processParams.maxBadPixelQuality = 0.001f;
+                result.processParams.minGoodPixelQuality = 0.999f;
                 return result;
             }
         }

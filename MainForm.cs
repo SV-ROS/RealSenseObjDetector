@@ -29,9 +29,6 @@ namespace raw_streams.cs
         private TrackBar[] cameraSettingsTrackBars;
         private volatile bool closing = false;
         private volatile bool stop = false;
-        private string pcdFilePath = "c:/p/00-rs2pcd/";
-        private int pcdFileIndex = 1;
-        private bool saveToPcdRequested = false;
 
         public MainForm(PXCMSession session)
         {
@@ -41,27 +38,17 @@ namespace raw_streams.cs
             PopulateDeviceMenu();
             FormClosing += new FormClosingEventHandler(MainForm_FormClosing);
             pictureBox1.Paint += new PaintEventHandler(pictureBitmap_Paint);
-            this.buttonSaveToPcd.Enabled = false;
-            this.textBoxPcdFilePath.Text = this.pcdFilePath;
 
             this.comboBoxQualityEstimator.Items.AddRange(
-                new object[] {"DepthClusters"
-                        , "ColorClusters"
-                        , "Curvature"
-                        , "CurvatureStability"
-                        , "DepthChange"
+                new object[] {"ColorClusters"
                 });
 
-            this.comboBoxNormalEstimator1.Items.AddRange(
-                new object[] {"COVARIANCE_MATRIX"
-                        , "AVERAGE_3D_GRADIENT"
-                        , "AVERAGE_DEPTH_CHANGE"
-                });
-
-            this.comboBoxNormalEstimator2.Items.AddRange(
-                new object[] {"COVARIANCE_MATRIX"
-                        , "AVERAGE_3D_GRADIENT"
-                        , "AVERAGE_DEPTH_CHANGE"
+            this.comboBoxColoringMethod.Items.AddRange(
+                new object[] {"None"
+                        , "ByScore"
+                        , "ByClusterMeanColor"
+                        , "ByClusterMaxColor"
+                        , "ByClusterDepth"
                 });
 
             this.cameraSettingsTrackBars = new TrackBar[]
@@ -80,46 +67,10 @@ namespace raw_streams.cs
         private delegate void UpdateStatusDelegate(string status);
 
 #region Properies and change state methods
-        public bool IsSaveToPcdRequested()
-        {
-            return saveToPcdRequested;
-        }
-        public string getXyzPcdFileName()
-        {
-            return pcdFilePath + string.Format("/{0:D6}.xyz.pcd", pcdFileIndex);
-        }
-        public string getNormalsPcdFileName()
-        {
-            return pcdFilePath + string.Format("/{0:D6}.normals.pcd", pcdFileIndex);
-        }
-        public bool IsSaveToPcdBinary()
-        {
-            return this.radioButtonBinary.Checked;
-        }
-        public void OnSaveToPcdCompleted()
-        {
-            saveToPcdRequested = false;
-            ++pcdFileIndex;
-            this.Invoke(
-                new UpdateFromOtherThreadDelegate(
-                    delegate()
-                    {
-                        this.buttonSaveToPcd.Enabled = true;
-                    }
-                )
-            );
-        }
-
-        public string GetFileName()
-        {
-            return filename;
-        }
-
         public bool GetStopState()
         {
             return stop;
         }
-
 
         internal GuiParams GetParams()
         {
@@ -478,24 +429,6 @@ namespace raw_streams.cs
             stop = true;
         }
 
-        private void buttonSaveToPcd_Click(object sender, EventArgs e)
-        {
-            saveToPcdRequested = true;
-            this.buttonSaveToPcd.Enabled = false;
-        }
-
-        private void buttonSelectPcdFilePath_Click(object sender, EventArgs e)
-        {
-            using (System.Windows.Forms.FolderBrowserDialog selectFolderDlg = new FolderBrowserDialog())
-            {
-                selectFolderDlg.SelectedPath = this.pcdFilePath;
-                if (selectFolderDlg.ShowDialog() == System.Windows.Forms.DialogResult.OK)
-                {
-                    this.textBoxPcdFilePath.Text = this.pcdFilePath = selectFolderDlg.SelectedPath;
-                }
-            }
-        }
-
 #endregion
 
 #region Picture and rendering
@@ -532,7 +465,6 @@ namespace raw_streams.cs
                         MainMenu.Enabled = false;
                         Start.Enabled = false;
                         Stop.Enabled = true;
-                        this.buttonSaveToPcd.Enabled = true;
                     }
                 ));
                 RenderStreams rs = new RenderStreams(this);
@@ -549,7 +481,6 @@ namespace raw_streams.cs
                 {
                     Start.Enabled = true;
                     Stop.Enabled = false;
-                    buttonSaveToPcd.Enabled = false;
                     MainMenu.Enabled = true;
                     if (closing)
                         Close();
@@ -676,41 +607,10 @@ namespace raw_streams.cs
         private void setupAllParamsCtls()
         {
             this.comboBoxQualityEstimator.SelectedIndex = (int)guiParams.processParams.qualityEstimationMethod;
+            this.comboBoxColoringMethod.Visible = true;
+            this.comboBoxColoringMethod.SelectedIndex = (int)guiParams.processParams.colorClustersParams.pixelColoringMethod;
 
-            bool isFirstNormalRequired = guiParams.processParams.qualityEstimationMethod == managed_pcl.QualityEstimationMethod.Curvature
-                || guiParams.processParams.qualityEstimationMethod == managed_pcl.QualityEstimationMethod.CurvatureStability;
-
-            this.buttonSaveToPcd.Enabled = isFirstNormalRequired;
-
-            this.comboBoxNormalEstimator1.Visible = isFirstNormalRequired;
-            if (isFirstNormalRequired)
-            {
-                this.label1.Text = "1st normal estimation method";
-                this.label2.Text = "1st normal max depth change factor";
-                this.label3.Text = "1st normal smoothing size";
-                this.textBoxMaxDepthChangeFactor1.Text = guiParams.processParams.normalEstimationParams1.maxDepthChangeFactor.ToString();
-                this.textBoxNormalSmoothingSize1.Text = guiParams.processParams.normalEstimationParams1.normalSmoothingSize.ToString();
-                this.comboBoxNormalEstimator1.SelectedIndex = (int)guiParams.processParams.normalEstimationParams1.normalEstimatorMethod;
-            }
-
-            bool isSecondNormalRequired = guiParams.processParams.qualityEstimationMethod == managed_pcl.QualityEstimationMethod.CurvatureStability;
-            this.comboBoxNormalEstimator2.Visible = isSecondNormalRequired;
-            this.textBoxMaxDepthChangeFactor2.Visible = isSecondNormalRequired;
-            this.textBoxNormalSmoothingSize2.Visible = isSecondNormalRequired;
-            this.label5.Visible = isSecondNormalRequired;
-            this.label6.Visible = isSecondNormalRequired;
-            this.label7.Visible = isSecondNormalRequired;
-
-            bool isDepthClusterParamsRequired = guiParams.processParams.qualityEstimationMethod == managed_pcl.QualityEstimationMethod.DepthClusters;
-            if (isDepthClusterParamsRequired)
-            {
-                this.label1.Text = "";
-                this.label2.Text = "Depth Clusters deltaDepthThreshold";
-                this.label3.Text = "Depth Clusters halfWindowSize";
-                this.textBoxMaxDepthChangeFactor1.Text = guiParams.processParams.depthClustersParams.deltaDepthThreshold.ToString();
-                this.textBoxNormalSmoothingSize1.Text = guiParams.processParams.depthClustersParams.halfWindowSize.ToString();
-            }
-            bool isColorClusterParamsRequired = guiParams.processParams.qualityEstimationMethod == managed_pcl.QualityEstimationMethod.ColorClusters;
+            bool isColorClusterParamsRequired = guiParams.processParams.qualityEstimationMethod == managed_obj_detector.QualityEstimationMethod.ColorClusters;
             if (isColorClusterParamsRequired)
             {
                 this.label1.Text = "";
@@ -719,17 +619,14 @@ namespace raw_streams.cs
                 this.textBoxMaxDepthChangeFactor1.Text = guiParams.processParams.colorClustersParams.colorDistanceThreshold.ToString();
                 this.textBoxNormalSmoothingSize1.Text = guiParams.processParams.colorClustersParams.halfWindowSize.ToString();
             }
-            this.textBoxMaxDepthChangeFactor1.Visible = isFirstNormalRequired || isDepthClusterParamsRequired || isColorClusterParamsRequired;
-            this.textBoxNormalSmoothingSize1.Visible = isFirstNormalRequired || isDepthClusterParamsRequired || isColorClusterParamsRequired;
-            this.label1.Visible = isFirstNormalRequired || isDepthClusterParamsRequired || isColorClusterParamsRequired;
-            this.label2.Visible = isFirstNormalRequired || isDepthClusterParamsRequired || isColorClusterParamsRequired;
-            this.label3.Visible = isFirstNormalRequired || isDepthClusterParamsRequired || isColorClusterParamsRequired;
+            this.textBoxMaxDepthChangeFactor1.Visible = isColorClusterParamsRequired;
+            this.textBoxNormalSmoothingSize1.Visible = isColorClusterParamsRequired;
+            this.label1.Visible = isColorClusterParamsRequired;
+            this.label2.Visible = isColorClusterParamsRequired;
+            this.label3.Visible = isColorClusterParamsRequired;
 
-            this.textBoxMaxDepthChangeFactor2.Text = guiParams.processParams.normalEstimationParams2.maxDepthChangeFactor.ToString();
-            this.textBoxNormalSmoothingSize2.Text = guiParams.processParams.normalEstimationParams2.normalSmoothingSize.ToString();
-            this.comboBoxNormalEstimator2.SelectedIndex = (int)guiParams.processParams.normalEstimationParams2.normalEstimatorMethod;
-            this.trackBarMaxBad.Value = (int)(1000f * guiParams.maxBadPixelQuality);
-            this.trackBarMinGood.Value = (int)(1000f * guiParams.minGoodPixelQuality);
+            this.trackBarMaxBad.Value = (int)(1000f * guiParams.processParams.maxBadPixelQuality);
+            this.trackBarMinGood.Value = (int)(1000f * guiParams.processParams.minGoodPixelQuality);
         }
 
         private void resetAllParams()
@@ -745,40 +642,31 @@ namespace raw_streams.cs
 
         private void comboBoxQualityEstimator_SelectedIndexChanged(object sender, EventArgs e)
         {
-            guiParams.processParams.qualityEstimationMethod = (managed_pcl.QualityEstimationMethod)this.comboBoxQualityEstimator.SelectedIndex;
+            guiParams.processParams.qualityEstimationMethod = (managed_obj_detector.QualityEstimationMethod)this.comboBoxQualityEstimator.SelectedIndex;
             this.setupAllParamsCtls();
         }
 
 #endregion
 
 #region First Normal or DepthClusters UI
-        private void comboBoxNormalEstimator_SelectedIndexChanged(object sender, EventArgs e)
+        private void comboBoxColoringMethod_SelectedIndexChanged(object sender, EventArgs e)
         {
-            guiParams.processParams.normalEstimationParams1.normalEstimatorMethod = (managed_pcl.NormalEstimationMethod)comboBoxNormalEstimator1.SelectedIndex;
+            guiParams.processParams.colorClustersParams.pixelColoringMethod
+                = (managed_obj_detector.PixelColoringMethodEnum)comboBoxColoringMethod.SelectedIndex;
         }
 
         private void textBoxMaxDepthChangeFactor_TextChanged(object sender, EventArgs e)
         {
-            bool isDepthClusterParamsRequired = guiParams.processParams.qualityEstimationMethod == managed_pcl.QualityEstimationMethod.DepthClusters;
-            bool isColorClusterParamsRequired = guiParams.processParams.qualityEstimationMethod == managed_pcl.QualityEstimationMethod.ColorClusters;
-            if (isDepthClusterParamsRequired)
-                int.TryParse(textBoxMaxDepthChangeFactor1.Text, out guiParams.processParams.depthClustersParams.deltaDepthThreshold);
-            else if(isColorClusterParamsRequired)
+            bool isColorClusterParamsRequired = guiParams.processParams.qualityEstimationMethod == managed_obj_detector.QualityEstimationMethod.ColorClusters;
+            if(isColorClusterParamsRequired)
                 int.TryParse(textBoxMaxDepthChangeFactor1.Text, out guiParams.processParams.colorClustersParams.colorDistanceThreshold);
-            else
-                float.TryParse(textBoxMaxDepthChangeFactor1.Text, out guiParams.processParams.normalEstimationParams1.maxDepthChangeFactor);
         }
 
         private void textBoxNormalSmoothingSize_TextChanged(object sender, EventArgs e)
         {
-            bool isDepthClusterParamsRequired = guiParams.processParams.qualityEstimationMethod == managed_pcl.QualityEstimationMethod.DepthClusters;
-            bool isColorClusterParamsRequired = guiParams.processParams.qualityEstimationMethod == managed_pcl.QualityEstimationMethod.ColorClusters;
-            if (isDepthClusterParamsRequired)
-                int.TryParse(textBoxNormalSmoothingSize1.Text, out guiParams.processParams.depthClustersParams.halfWindowSize);
-            else if(isColorClusterParamsRequired)
+            bool isColorClusterParamsRequired = guiParams.processParams.qualityEstimationMethod == managed_obj_detector.QualityEstimationMethod.ColorClusters;
+            if(isColorClusterParamsRequired)
                 int.TryParse(textBoxNormalSmoothingSize1.Text, out guiParams.processParams.colorClustersParams.halfWindowSize);
-            else
-                float.TryParse(textBoxNormalSmoothingSize1.Text, out guiParams.processParams.normalEstimationParams1.normalSmoothingSize);
         }
         
 #endregion
@@ -786,17 +674,17 @@ namespace raw_streams.cs
 #region Second normal UI
         private void comboBoxNormalEstimator2_SelectedIndexChanged(object sender, EventArgs e)
         {
-            guiParams.processParams.normalEstimationParams2.normalEstimatorMethod = (managed_pcl.NormalEstimationMethod)comboBoxNormalEstimator2.SelectedIndex;
+            //fixme: remove: comboBoxNormalEstimator2.SelectedIndex;
         }
 
         private void textBoxMaxDepthChangeFactor2_TextChanged(object sender, EventArgs e)
         {
-            float.TryParse(textBoxMaxDepthChangeFactor2.Text, out guiParams.processParams.normalEstimationParams2.maxDepthChangeFactor);
+            //fixme: textBoxMaxDepthChangeFactor2
         }
 
         private void textBoxNormalSmoothingSize2_TextChanged(object sender, EventArgs e)
         {
-            float.TryParse(textBoxNormalSmoothingSize2.Text, out guiParams.processParams.normalEstimationParams2.normalSmoothingSize);
+            //fixme: textBoxNormalSmoothingSize2.Text, out guiParams.processParams.normalEstimationParams2.normalSmoothingSize);
         }
 
 #endregion
@@ -840,14 +728,14 @@ namespace raw_streams.cs
         {
             if (trackBarMinGood.Value < trackBarMaxBad.Value)
                 trackBarMinGood.Value = trackBarMaxBad.Value;
-            guiParams.maxBadPixelQuality = 0.001f * trackBarMaxBad.Value;
+            guiParams.processParams.maxBadPixelQuality = 0.001f * trackBarMaxBad.Value;
         }
 
         private void trackBarMinGood_Scroll(object sender, EventArgs e)
         {
             if (trackBarMinGood.Value < trackBarMaxBad.Value)
                 trackBarMaxBad.Value = trackBarMinGood.Value;
-            guiParams.minGoodPixelQuality = 0.001f * trackBarMinGood.Value;
+            guiParams.processParams.minGoodPixelQuality = 0.001f * trackBarMinGood.Value;
         }
 #endregion
 
